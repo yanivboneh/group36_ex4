@@ -14,7 +14,7 @@ Last updated by Amnon Drory, Winter 2011.
 #include <winsock2.h>
 
 #include "client_comm.h"
-#include "SocketSendRecvTools.h"
+#include "Socket_Send_Recv_Tools.h"
 
 /*oOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoO*/
 
