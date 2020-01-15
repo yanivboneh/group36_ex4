@@ -3,17 +3,12 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <stdbool.h>
 #include <winsock2.h>
 
 #include "Server_Comm.h"
 #include "Socket_Shared.h"
 #include "Socket_Send_Recv_Tools.h"
-
-
-#define NUM_OF_WORKER_THREADS 2
-#define MAX_LOOPS 3
-#define SEND_STR_SIZE 35
-
 
 HANDLE ThreadHandles[NUM_OF_WORKER_THREADS];
 SOCKET ThreadInputs[NUM_OF_WORKER_THREADS];
@@ -107,7 +102,7 @@ int MainServer(char *port_num)
 
 	printf("Waiting for a client to connect...\n");
 
-	for (Loop = 0; Loop < MAX_LOOPS; Loop++)
+	while (TRUE)
 	{
 		SOCKET AcceptSocket = accept(MainSocket, NULL, NULL);
 		if (AcceptSocket == INVALID_SOCKET)
@@ -120,7 +115,7 @@ int MainServer(char *port_num)
 
 		Ind = FindFirstUnusedThreadSlot();
 
-		if (Ind == NUM_OF_WORKER_THREADS) //no slot is available
+		if (Ind == NUM_OF_WORKER_THREADS)
 		{
 			printf("No slots available for client, dropping the connection.\n");
 			closesocket(AcceptSocket); //Closing the socket, dropping the connection.
@@ -217,22 +212,31 @@ static void CleanupWorkerThreads()
 static DWORD ServiceThread(SOCKET *t_socket)
 {
 	char SendStr[SEND_STR_SIZE];
-
+	char *token = NULL, *message_type = NULL;
 	BOOL Done = FALSE;
 	TransferResult_t SendRes;
 	TransferResult_t RecvRes;
 
 	strcpy(SendStr, "Welcome to this server!");
 
-	SendRes = SendString(SendStr, *t_socket);
+	RecvRes = ReceiveString(SendStr, *t_socket);
 
-	if (SendRes == TRNS_FAILED)
+	if (RecvRes == TRNS_FAILED)
 	{
-		printf("Service socket error while writing, closing thread.\n");
+		printf("Service socket error occured while reading, closing thread.\n");
 		closesocket(*t_socket);
-		return 1;
+		//return 1;
+	}
+	else if (RecvRes == TRNS_DISCONNECTED)
+	{
+		printf("Connection error occured while reading, closing thread.\n");
+		//goto some_error;
 	}
 
+	token = strtok(AcceptedStr, ":"); //extract message type
+	strcpy(message_type, token);
+	token = strtok(NULL, ":"); //extract username
+	strcpy(username, token);
 	while (!Done)
 	{
 		char *AcceptedStr = NULL;
