@@ -4,5 +4,7 @@
 
 int main(int argc, char *argv[])
 {
-	MainClient();
+	int error_flag = 0;
+	error_flag = MainClient(argv[1], argv[2], argv[3]);
+	return error_flag;
 }

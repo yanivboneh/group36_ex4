@@ -14,6 +14,7 @@ Last updated by Amnon Drory, Winter 2011.
 #include <winsock2.h>
 
 #include "client_comm.h"
+#include "Socket_Shared.h"
 #include "Socket_Send_Recv_Tools.h"
 
 /*oOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoO*/
@@ -56,12 +57,13 @@ static DWORD RecvDataThread(void)
 /*oOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoO*/
 
 //Sending data to the server
-static DWORD SendDataThread(void)
+static DWORD SendDataThread(LPVOID lpParam)
 {
+	//char *end_ptr;
 	char SendStr[256];
 	TransferResult_t SendRes;
 
-	while (1)
+	while (TRUE)
 	{
 		gets_s(SendStr, sizeof(SendStr)); //Reading a string from the keyboard
 
@@ -78,10 +80,17 @@ static DWORD SendDataThread(void)
 	}
 }
 
-/*oOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoO*/
 
-int MainClient(char *server_ip, char *port_num, char username)
+//int client_game_handler(char *username, SOCKET *server_socket){}
+
+int MainClient(char *server_ip, char *port_num_str, char *username)
 {
+	int client_input_for_error = 0, port_num = 0;
+	char *end_ptr;
+	char send_buffer[MAX_MESSAGE_LEN];
+	struct sockaddr_in socket_address;
+	TransferResult_t SendRes;
+	TransferResult_t RecvRes;
 	SOCKADDR_IN clientService;
 	HANDLE hThread[2];
 
@@ -94,17 +103,13 @@ int MainClient(char *server_ip, char *port_num, char username)
 	if (iResult != NO_ERROR)
 		printf("Error at WSAStartup()\n");
 
-	//Call the socket function and return its value to the m_socket variable. 
-	// For this application, use the Internet address family, streaming sockets, and the TCP/IP protocol.
-
 	// Create a socket.
+reconnecting:
 	m_socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-
-	// Check for errors to ensure that the socket is a valid socket.
 	if (m_socket == INVALID_SOCKET) {
 		printf("Error at socket(): %ld\n", WSAGetLastError());
 		WSACleanup();
-		return;
+		return -1;
 	}
 	/*
 	 The parameters passed to the socket function can be changed for different implementations.
@@ -114,28 +119,54 @@ int MainClient(char *server_ip, char *port_num, char username)
 	 the socket. WSAGetLastError returns an error number associated with the last error that occurred.
 	 */
 
-
-	 //For a client to communicate on a network, it must connect to a server.
-	 // Connect to a server.
-
 	 //Create a sockaddr_in object clientService and set  values.
 	clientService.sin_family = AF_INET;
-	clientService.sin_addr.s_addr = inet_addr(SERVER_ADDRESS_STR); //Setting the IP address to connect to
+	clientService.sin_addr.s_addr = inet_addr(server_ip); //Setting the IP address to connect to
+	port_num = (int)strtol(port_num_str, &end_ptr, 10);
 	clientService.sin_port = htons(SERVER_PORT); //Setting the port to connect to.
+	while (TRUE){
+		if (connect(m_socket, (SOCKADDR*)&clientService, sizeof(clientService)) == SOCKET_ERROR) {
+			printf("Failed connecting to server on %s:%s\n"
+				"Choose what to do next:\n"
+				"1. Try to reconnect\n"
+				"2. Exit\n",
+				server_ip, port_num_str);
+			scanf_s("%d", &client_input_for_error);
+			if (client_input_for_error == 1) {
+				goto reconnecting;
+			}
+			else {
+				//goto some exit
+			}
+			WSACleanup();
+			return 0;
+		}
+		else {
+			printf("Connected to server on %s:%s\n", server_ip, port_num_str);
+			printf("Client: CLIENT_REQUEST:%s\n", username);
+			strcpy(send_buffer, "CLIENT_REQUEST:");
+			strcat(send_buffer, username);
+			SendRes = SendString(send_buffer, m_socket);
+			char* AcceptedStr = NULL;
+			char* message_type = NULL;
 
-	/*
-		AF_INET is the Internet address family.
-	*/
-
-
-	// Call the connect function, passing the created socket and the sockaddr_in structure as parameters. 
-	// Check for general errors.
-	if (connect(m_socket, (SOCKADDR*)&clientService, sizeof(clientService)) == SOCKET_ERROR) {
-		printf("Failed to connect.\n");
-		WSACleanup();
-		return;
+			RecvRes = ReceiveString(&AcceptedStr, m_socket);
+			if (RecvRes == TRNS_FAILED){
+				printf("Socket error while trying to write data to socket\n");
+				return 0x555;
+			}
+			if (STRINGS_ARE_EQUAL(AcceptedStr, "SERVER_APPROVED")){
+				break;
+				printf("Client: SERVER_APPROVED\n");
+				//TODO: goto two options menu
+			}
+			else if (STRINGS_ARE_EQUAL(AcceptedStr, "SERVER_DENIED")){
+				printf("Server on %s:%s denied the connection request.\n", server_ip, port_num_str);
+				//goto two options menu
+			}
+		}
 	}
-
+	
 	// Send and receive data.
 	/*
 		In this code, two integers are used to keep track of the number of bytes that are sent and received.
@@ -149,7 +180,7 @@ int MainClient(char *server_ip, char *port_num, char username)
 		NULL,
 		0,
 		(LPTHREAD_START_ROUTINE)SendDataThread,
-		NULL,
+		username,
 		0,
 		NULL
 	);
@@ -157,7 +188,7 @@ int MainClient(char *server_ip, char *port_num, char username)
 		NULL,
 		0,
 		(LPTHREAD_START_ROUTINE)RecvDataThread,
-		NULL,
+		username,
 		0,
 		NULL
 	);
@@ -174,6 +205,6 @@ int MainClient(char *server_ip, char *port_num, char username)
 
 	WSACleanup();
 
-	return;
+	return-1;
 }
 
