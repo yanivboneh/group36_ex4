@@ -67,14 +67,12 @@ TransferResult_t SendString( const char *Str, SOCKET sd )
 
 /*oOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoO*/
 
-TransferResult_t ReceiveBuffer( char* OutputBuffer, int BytesToReceive, SOCKET sd )
+TransferResult_t ReceiveBuffer( char* OutputBuffer, int BytesToReceive, SOCKET sd, char *client_or_server )
 {
 	char* CurPlacePtr = OutputBuffer;
 	int BytesJustTransferred;
 	int RemainingBytesToReceive = BytesToReceive;
-	
-	while ( RemainingBytesToReceive > 0 )  
-	{
+	while ( RemainingBytesToReceive > 0 )  {
 		/* send does not guarantee that the entire message is sent */
 		BytesJustTransferred = recv(sd, CurPlacePtr, RemainingBytesToReceive, 0);
 		if ( BytesJustTransferred == SOCKET_ERROR ) 
@@ -94,13 +92,12 @@ TransferResult_t ReceiveBuffer( char* OutputBuffer, int BytesToReceive, SOCKET s
 
 /*oOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoO*/
 
-TransferResult_t ReceiveString( char** OutputStrPtr, SOCKET sd )
+TransferResult_t ReceiveString( char** OutputStrPtr, SOCKET sd, char *client_or_server)
 {
 	/* Recv the the request to the server on socket sd */
 	int TotalStringSizeInBytes;
 	TransferResult_t RecvRes;
 	char* StrBuffer = NULL;
-
 	if ( ( OutputStrPtr == NULL ) || ( *OutputStrPtr != NULL ) )
 	{
 		printf("The first input to ReceiveString() must be " 
@@ -116,7 +113,7 @@ TransferResult_t ReceiveString( char** OutputStrPtr, SOCKET sd )
 	RecvRes = ReceiveBuffer( 
 		(char *)( &TotalStringSizeInBytes ),
 		(int)( sizeof(TotalStringSizeInBytes) ), // 4 bytes
-		sd );
+		sd, client_or_server);
 
 	if ( RecvRes != TRNS_SUCCEEDED ) return RecvRes;
 
@@ -128,7 +125,7 @@ TransferResult_t ReceiveString( char** OutputStrPtr, SOCKET sd )
 	RecvRes = ReceiveBuffer( 
 		(char *)( StrBuffer ),
 		(int)( TotalStringSizeInBytes), 
-		sd );
+		sd, client_or_server);
 
 	if ( RecvRes == TRNS_SUCCEEDED ) 
 		{ *OutputStrPtr = StrBuffer; }
