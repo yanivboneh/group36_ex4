@@ -56,7 +56,6 @@ int MainServer(char *port_num_str)
 		printf("Failed listening on socket, error %ld.\n", WSAGetLastError());
 		goto server_cleanup_2;
 	}
-	// Initialize all thread handles to NULL, to mark that they have not been initialized
 	for (Ind = 0; Ind < NUM_OF_WORKER_THREADS; Ind++)
 		ThreadHandles[Ind] = NULL;
 	printf("Waiting for a client to connect...\n");
@@ -66,7 +65,6 @@ int MainServer(char *port_num_str)
 			printf("Accepting connection with client failed, error %ld\n", WSAGetLastError());
 			goto server_cleanup_3;
 		}
-
 		printf("Server: Client Connected.\n");
 		Ind = FindFirstUnusedThreadSlot();
 		if (Ind == NUM_OF_WORKER_THREADS){
@@ -103,8 +101,7 @@ server_cleanup_1:
 	return error_flag;
 }
 
-static int FindFirstUnusedThreadSlot()
-{
+static int FindFirstUnusedThreadSlot(){
 	int Ind;
 
 	for (Ind = 0; Ind < NUM_OF_WORKER_THREADS; Ind++)
@@ -124,7 +121,6 @@ static int FindFirstUnusedThreadSlot()
 			}
 		}
 	}
-
 	return Ind;
 }
 
@@ -175,10 +171,8 @@ char* get_server_move_as_string(int server_move) {
 
 int who_is_the_winner(char *player1_move, char *player2_move) {
 	int ret_val = -1;
-
 	if (!strcmp(player1_move, player2_move))
 		ret_val = 0;
-
 	else if (!strcmp(player1_move, ROCK)){
 		if (!strcmp(player2_move, PAPER) || !strcmp(player2_move, SPOCK))
 			ret_val = 2;
@@ -212,6 +206,7 @@ int who_is_the_winner(char *player1_move, char *player2_move) {
 	return ret_val;
 }
 
+
 int play_against_server(SOCKET *server_socket) {
 	time_t t;
 	int random_server_move, error_flag = 0;
@@ -224,9 +219,8 @@ int play_against_server(SOCKET *server_socket) {
 	random_server_move = rand() % 6+1;
 	server_move = get_server_move_as_string(random_server_move);
 	printf("Server: SERVER_PLAYER_MOVE_REQUEST\n");
-	strcpy(send_buffer, "SERVER_PLAYER_MOVE_REQUEST");
-	SendRes = SendString(send_buffer, *server_socket);
-	if (SendRes == TRNS_FAILED) {
+	error_flag = send_message_with_length("SERVER_PLAYER_MOVE_REQUEST", NULL, server_socket);
+	if (error_flag == -1) {
 		printf("Service socket error while writing, closing thread.\n");
 		closesocket(*server_socket);
 		return 1;
@@ -256,22 +250,18 @@ int server_game_handler(char *username, SOCKET *server_socket){
 	TransferResult_t SendRes;
 	TransferResult_t RecvRes;
 	TCHAR *rcv_buffer = NULL;
-	char send_buffer[MAX_MESSAGE_LEN];
+	char send_message_buffer[MAX_MESSAGE_LEN], send_message_len_buffer[MESSAGE_LEN_AS_INT];
 	char *AcceptedStr = NULL;
-	printf("Server: SERVER_APPROVED\n");
-	strcpy(send_buffer, "SERVER_APPROVED");
-	SendRes = SendString(send_buffer, *server_socket);
-	printf("Server: SERVER_MAIN_MENU\n");
-	strcpy(send_buffer, "SERVER_MAIN_MENU");
-	SendRes = SendString(send_buffer, *server_socket);
-	if (SendRes == TRNS_FAILED) {
+	//printf("Server: SERVER_APPROVED\n");
+	error_flag = send_message_with_length("SERVER_APPROVED", NULL, server_socket);
+	error_flag = send_message_with_length("SERVER_MAIN_MENU", NULL, server_socket);
+	if (error_flag == -1) {
 		printf("Service socket error while writing, closing thread.\n");
 		closesocket(*server_socket);
 		return 1;
 	}
 	while (TRUE) {
 		//*AcceptedStr = NULL;
-		printf("Server: Going into ReceiveString\n");
 		RecvRes = ReceiveString(&rcv_buffer, *server_socket, "server");
 		if (RecvRes == TRNS_FAILED) {
 			printf("Service socket error occured while reading, closing thread.\n");
@@ -289,9 +279,7 @@ int server_game_handler(char *username, SOCKET *server_socket){
 		}
 		else if (STRINGS_ARE_EQUAL(rcv_buffer, "CLIENT_CPU")) {
 			error_flag = play_against_server(server_socket);
-		}
-
-		
+		}		
 	}
 	free(AcceptedStr);
 	return error_flag;
@@ -304,13 +292,11 @@ static DWORD ServiceThread(SOCKET *t_socket)
 {
 	int error_flag = 0;
 	char username[MAX_USERNAME_LENGTH];
-	char *token = NULL, message_type[MAX_MESSAGE_LEN+1], send_buffer[100];
+	char *token = NULL, message_type[MAX_MESSAGE_LEN+1];
 	TCHAR *rcv_buffer = NULL;
-	BOOL Done = FALSE;
-	TransferResult_t SendRes;
 	TransferResult_t RecvRes;
 	RecvRes = ReceiveString(&rcv_buffer, *t_socket, "server");
-	printf("Server: rcv_buffer = :%s", rcv_buffer);
+	printf("Server: rcv_buffer = :%s\n", rcv_buffer);
 	if (RecvRes == TRNS_FAILED){
 		printf("Service socket error occured while reading, closing thread.\n");
 		closesocket(*t_socket);
@@ -320,7 +306,6 @@ static DWORD ServiceThread(SOCKET *t_socket)
 		printf("Connection error occured while reading, closing thread.\n");
 		//goto some_error;
 	}
-
 	token = strtok(rcv_buffer, ":"); //extract message type
 	strcpy(message_type, token);
 	token = strtok(NULL, ":"); //extract username
@@ -337,17 +322,15 @@ static DWORD ServiceThread(SOCKET *t_socket)
 			return 1;
 		}
 		if (STRINGS_ARE_EQUAL(message_type, "CLIENT_REQUEST")) {
-			strcpy(send_buffer, "SERVER_APPROVED");
-			printf("Server: %s\n", send_buffer);
-			SendRes = SendString(send_buffer, *t_socket);
+			//strcpy(send_buffer, "SERVER_APPROVED");
+			error_flag = send_message_with_length("SERVER_APPROVED", NULL, t_socket);
 			error_flag = server_game_handler(username, t_socket);
 		}
-		if (SendRes == TRNS_FAILED){
-			printf("Service socket error while writing, closing thread.\n");
-			closesocket(*t_socket);
-			return 1;
-		}
-		
+		//if (SendRes == TRNS_FAILED){
+		//	printf("Service socket error while writing, closing thread.\n");
+		//	closesocket(*t_socket);
+		//	return 1;
+		//}	
 	}
 	closesocket(*t_socket);
 	return 0;

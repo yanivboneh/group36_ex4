@@ -7,8 +7,11 @@
 */
 /*oOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoO*/
 
-#include "Socket_Send_Recv_Tools.h"
+#define _CRT_SECURE_NO_WARNINGS
+#define _WINSOCK_DEPRECATED_NO_WARNINGS
 
+#include "Socket_Send_Recv_Tools.h"
+#include "Socket_Shared.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -41,27 +44,18 @@ TransferResult_t SendBuffer( const char* Buffer, int BytesToSend, SOCKET sd )
 
 TransferResult_t SendString( const char *Str, SOCKET sd )
 {
-	/* Send the the request to the server on socket sd */
 	int TotalStringSizeInBytes;
 	TransferResult_t SendRes;
-
-	/* The request is sent in two parts. First the Length of the string (stored in 
-	   an int variable ), then the string itself. */
-		
 	TotalStringSizeInBytes = (int)( strlen(Str) + 1 ); // terminating zero also sent	
-
 	SendRes = SendBuffer( 
 		(const char *)( &TotalStringSizeInBytes ),
 		(int)( sizeof(TotalStringSizeInBytes) ), // sizeof(int) 
 		sd );
-
 	if ( SendRes != TRNS_SUCCEEDED ) return SendRes ;
-
 	SendRes = SendBuffer( 
 		(const char *)( Str ),
 		(int)( TotalStringSizeInBytes ), 
 		sd );
-
 	return SendRes;
 }
 
@@ -135,4 +129,37 @@ TransferResult_t ReceiveString( char** OutputStrPtr, SOCKET sd, char *client_or_
 	}
 		
 	return RecvRes;
+}
+
+int send_message_with_length(char* message, char* parameters, SOCKET *server_socket) {
+	TransferResult_t SendRes;
+	int error_flag = 0;
+	char *send_message_buffer, send_message_len_buffer[MESSAGE_LEN_AS_INT+1];
+	if (parameters != NULL) {
+		send_message_buffer = (char*)malloc((strlen(message) + strlen(parameters) + 1));
+		strcpy(send_message_buffer, message);
+		strcat(send_message_buffer, ":");
+		strcat(send_message_buffer, parameters);
+	}
+	else {
+		send_message_buffer = (char*)malloc((strlen(message) + 1));
+		strcpy(send_message_buffer, message);
+	}
+	_itoa(strlen(send_message_buffer), send_message_len_buffer, 10);
+	SendRes = SendString(send_message_len_buffer, *server_socket);
+	if (SendRes == TRNS_FAILED) {
+		printf("Service socket error while writing, closing thread.\n");
+		closesocket(*server_socket);
+		error_flag = -1;
+		goto exit;
+	}
+	SendRes = SendString(send_message_buffer, *server_socket);
+	if (SendRes == TRNS_FAILED) {
+		printf("Service socket error while writing, closing thread.\n");
+		closesocket(*server_socket);
+		error_flag = -1;
+	}
+exit:
+	free(send_message_buffer);
+	return error_flag;
 }

@@ -127,15 +127,6 @@ reconnecting:
 		WSACleanup();
 		return -1;
 	}
-	/*
-	 The parameters passed to the socket function can be changed for different implementations.
-	 Error detection is a key part of successful networking code.
-	 If the socket call fails, it returns INVALID_SOCKET.
-	 The if statement in the previous code is used to catch any errors that may have occurred while creating
-	 the socket. WSAGetLastError returns an error number associated with the last error that occurred.
-	 */
-
-	 //Create a sockaddr_in object clientService and set  values.
 	clientService.sin_family = AF_INET;
 	clientService.sin_addr.s_addr = inet_addr(server_ip); //Setting the IP address to connect to
 	port_num = (int)strtol(port_num_str, &end_ptr, 10);

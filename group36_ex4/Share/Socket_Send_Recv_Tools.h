@@ -17,6 +17,8 @@
 
 /*oOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoO*/
 
+
+
 typedef enum { TRNS_FAILED, TRNS_DISCONNECTED, TRNS_SUCCEEDED } TransferResult_t;
 
 /**
@@ -81,6 +83,7 @@ TransferResult_t ReceiveBuffer( char* OutputBuffer, int RemainingBytesToReceive,
  * TRNS_FAILED - otherwise
  */ 
 TransferResult_t ReceiveString( char** OutputStrPtr, SOCKET sd, char* client_or_server);
+int send_message_with_length(char* message, char* parameters, SOCKET *server_socket);
 
 
 /*oOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoO*/
