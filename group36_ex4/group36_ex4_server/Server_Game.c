@@ -65,6 +65,45 @@ int who_is_the_winner(char *player1_move, char *player2_move) {
 	return ret_val;
 }
 
+int play_against_another_client(SOCKET *server_socket, HANDLE *mutexhandle) {
+	int error_flag = 0;
+	FILE *file;
+	DWORD WaitingTime = 30000;
+	TCHAR RecvRes = NULL;
+	DWORD WaitRes = WaitForSingleObject(*mutexhandle, INFINITE);
+	//-----------------------Critical Section-------------------------//
+	if (WaitRes != WAIT_OBJECT_0)
+	{
+		if (WaitRes == WAIT_ABANDONED)
+		{
+			printf("Some thread has previously exited without releasing a mutex."
+				" This is not good programming. Please fix the code.\n");
+			return (ISP_MUTEX_ABANDONED);
+		}
+		else
+			return(ISP_MUTEX_WAIT_FAILED);
+	}
+
+	if ((file = fopen("GameSession.txt", "r")) != NULL)
+	{
+		// file exists, another client is waiting
+		fclose(file);
+		ReleaseMutex(*mutexhandle);
+		//-----------------------out of Critical Section-------------------------//
+		error_flag = send_message_with_length("SERVER_INVITE", NULL, server_socket);
+		error_flag = send_message_with_length("SERVER_PLAYER_MOVE_REQUEST", NULL, server_socket);
+		//RecvRes = ReceiveString(&rcv_buffer, *server_socket, "server");
+
+	}
+	else
+	{
+		// file does not exist, create file and wait for another player
+
+		file = fopen("GameSession.txt", "w");
+
+
+	}
+}
 
 int play_against_server(SOCKET *server_socket) {
 	time_t t;
@@ -115,13 +154,12 @@ int play_against_server(SOCKET *server_socket) {
 	return error_flag;
 }
 
-int server_game_handler(char *username, SOCKET *server_socket) {
+int server_game_handler(char *username, SOCKET *server_socket, HANDLE *mutexhandle) {
 	int error_flag = 0;
-	//TransferResult_t SendRes;
 	TransferResult_t RecvRes;
-	//TCHAR *rcv_buffer = NULL;
-	//char send_message_buffer[MAX_MESSAGE_LEN], send_message_len_buffer[MESSAGE_LEN_AS_INT];
+	TCHAR *rcv_buffer = NULL;
 	char *AcceptedStr = NULL;
+	//printf("Server: SERVER_APPROVED\n");
 	error_flag = send_message_with_length("SERVER_APPROVED", NULL, server_socket);
 	error_flag = send_message_with_length("SERVER_MAIN_MENU", NULL, server_socket);
 	if (error_flag == -1) {
@@ -130,7 +168,7 @@ int server_game_handler(char *username, SOCKET *server_socket) {
 		return 1;
 	}
 	while (TRUE) {
-		TCHAR *rcv_buffer = NULL;
+		//*AcceptedStr = NULL;
 		RecvRes = ReceiveString(&rcv_buffer, *server_socket, "server");
 		if (RecvRes == TRNS_FAILED) {
 			printf("Service socket error occured while reading, closing thread.\n");
@@ -141,12 +179,16 @@ int server_game_handler(char *username, SOCKET *server_socket) {
 			printf("Connection error occured while reading, closing thread.\n");
 			//goto some_error;
 		}
-		printf("Server: rcv_buffer = %s\n", rcv_buffer);
+		printf("Server: rcv_buffer = :%s\n", rcv_buffer);
+		printf("Server: Going out of ReceiveString\n");
 		if (STRINGS_ARE_EQUAL(rcv_buffer, "CLIENT_VERSUS")) {
-			//todo
+			play_against_another_client(server_socket, mutexhandle);
 		}
 		else if (STRINGS_ARE_EQUAL(rcv_buffer, "CLIENT_CPU")) {
 			error_flag = play_against_server(server_socket);
+		}
+		else if (STRINGS_ARE_EQUAL(rcv_buffer, "CLIENT_DISCONNECT")) {
+			closesocket(*server_socket);
 		}
 	}
 	free(AcceptedStr);
