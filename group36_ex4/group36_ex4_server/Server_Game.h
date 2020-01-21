@@ -3,6 +3,6 @@
 
 #include <winsock2.h>
 
-int server_game_handler(char *username, SOCKET *server_socket);
+int server_game_handler(char *username, SOCKET *server_socket, HANDLE *mutexhandle);
 
 #endif
