@@ -259,3 +259,4 @@ paket-files/
 # Python Tools for Visual Studio (PTVS)
 __pycache__/
 *.pyc
+/group36_ex4/group36_ex4_server/Handle_Client_Thread.c

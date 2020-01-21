@@ -1,4 +1,4 @@
-#define _CRT_SECURE_NO_WARNINGS
+ #define _CRT_SECURE_NO_WARNINGS
 #define _WINSOCK_DEPRECATED_NO_WARNINGS
 
 #include <stdio.h>
@@ -6,13 +6,12 @@
 #include <stdbool.h>
 #include <winsock2.h>
 #include <time.h>
+#include "Socket_Send_Recv_Tools.h"
 #include "Server_Comm.h"
 #include "Socket_Shared.h"
-#include "Socket_Send_Recv_Tools.h"
-#include "Server_Game.h"
 
 HANDLE ThreadHandles[NUM_OF_WORKER_THREADS];
-SOCKET ThreadInputs[NUM_OF_WORKER_THREADS];
+ThreadInputs_t ThreadInputs[NUM_OF_WORKER_THREADS];
 
 static int FindFirstUnusedThreadSlot();
 static void CleanupWorkerThreads();
@@ -28,6 +27,14 @@ int MainServer(char *port_num_str)
 	SOCKADDR_IN service;
 	WSADATA wsaData;
 	int StartupRes = WSAStartup(MAKEWORD(2, 2), &wsaData);
+	LPCTSTR MutexName = _T("MutexName");
+	HANDLE MutexHandle;
+
+	MutexHandle = CreateMutex(			//Create mutex to secure writing into game file
+		NULL,							// default security attributes
+		FALSE,							 // initially not owned
+		MutexName);
+
 	if (StartupRes != NO_ERROR){
 		printf("error %ld at WSAStartup( ), ending program.\n", WSAGetLastError());                                
 		return -1;
@@ -73,10 +80,12 @@ int MainServer(char *port_num_str)
 			closesocket(AcceptSocket); //Closing the socket, dropping the connection.
 		}
 		else{
-			ThreadInputs[Ind] = AcceptSocket; // shallow copy: don't close 
+			ThreadInputs[Ind].socket = AcceptSocket; // shallow copy: don't close 
+			
 											  // AcceptSocket, instead close 
 											  // ThreadInputs[Ind] when the
 											  // time comes.
+			ThreadInputs[Ind].mutexhandle = MutexHandle; // shallow copy: don't close 
 			ThreadHandles[Ind] = CreateThread(
 				NULL,
 				0,
@@ -140,34 +149,212 @@ static void CleanupWorkerThreads()
 
 			if (Res == WAIT_OBJECT_0)
 			{
-				closesocket(ThreadInputs[Ind]);
+				closesocket(ThreadInputs[Ind].socket);
 				CloseHandle(ThreadHandles[Ind]);
 				ThreadHandles[Ind] = NULL;
 				break;
 			}
 			else
 			{
-				printf("Waiting for thread failed. Ending program\n");
-				return;
+			printf("Waiting for thread failed. Ending program\n");
+			return;
 			}
 		}
 	}
 }
+char* get_server_move_as_string(int server_move) {
+	switch (server_move) {
+	case 1:
+		return ROCK;
+	case 2:
+		return PAPER;
+	case 3:
+		return SCISSORS;
+	case 4:
+		return SPOCK;
+	case 5:
+		return LIZARD;
+	default:
+		return "ERROR";
+	}
+}
 
+int who_is_the_winner(char *player1_move, char *player2_move) {
+	int ret_val = -1;
+	if (!strcmp(player1_move, player2_move))
+		ret_val = 0;
+	else if (!strcmp(player1_move, ROCK)) {
+		if (!strcmp(player2_move, PAPER) || !strcmp(player2_move, SPOCK))
+			ret_val = 2;
+		else
+			ret_val = 1;
+	}
+	else if (!strcmp(player1_move, PAPER)) {
+		if (!strcmp(player2_move, SCISSORS) || !strcmp(player2_move, LIZARD))
+			ret_val = 2;
+		else
+			ret_val = 1;
+	}
+	else if (!strcmp(player1_move, SCISSORS)) {
+		if (!strcmp(player2_move, ROCK) || !strcmp(player2_move, SPOCK))
+			ret_val = 2;
+		else
+			ret_val = 1;
+	}
+	else if (!strcmp(player1_move, SPOCK)) {
+		if (!strcmp(player2_move, LIZARD) || !strcmp(player2_move, PAPER))
+			ret_val = 2;
+		else
+			ret_val = 1;
+	}
+	else if (!strcmp(player1_move, LIZARD)) {
+		if (!strcmp(player2_move, SCISSORS) || !strcmp(player2_move, ROCK))
+			ret_val = 2;
+		else
+			ret_val = 1;
+	}
+	return ret_val;
+}
+
+
+int play_against_server(SOCKET *server_socket) {
+	time_t t;
+	int random_server_move, error_flag = 0;
+	char *server_move = NULL;
+	TransferResult_t SendRes;
+	TransferResult_t RecvRes;
+	TCHAR *rcv_buffer = NULL;
+	char send_buffer[MAX_MESSAGE_LEN], *AcceptedStr = NULL;;
+	srand((unsigned)time(&t));
+	random_server_move = rand() % 6 + 1;
+	server_move = get_server_move_as_string(random_server_move);
+	printf("Server: SERVER_PLAYER_MOVE_REQUEST\n");
+	error_flag = send_message_with_length("SERVER_PLAYER_MOVE_REQUEST", NULL, server_socket);
+	if (error_flag == -1) {
+		printf("Service socket error while writing, closing thread.\n");
+		closesocket(*server_socket);
+		return 1;
+	}
+	RecvRes = ReceiveString(&rcv_buffer, *server_socket, "server");
+	if (RecvRes == TRNS_FAILED) {
+		printf("Service socket error occured while reading, closing thread.\n");
+		closesocket(*server_socket);
+		//return 1;
+	}
+	else if (RecvRes == TRNS_DISCONNECTED) {
+		printf("Connection error occured while reading, closing thread.\n");
+		//goto some_error;
+	}
+	printf("Server: rcv_buffer = :%s\n", rcv_buffer);
+	if (who_is_the_winner(get_server_move_as_string(random_server_move), rcv_buffer) == 1) {
+		printf("Server won: %s > %s", get_server_move_as_string(random_server_move), rcv_buffer);
+	}
+	else {
+		printf("Server won: %s > %s", get_server_move_as_string(random_server_move), rcv_buffer);
+	}
+	return error_flag;
+}
+int play_against_another_client(SOCKET *server_socket, HANDLE *mutexhandle){
+	int error_flag = 0;
+	FILE *file;
+	DWORD WaitingTime = 30000;
+	DWORD WaitRes = WaitForSingleObject(*mutexhandle, INFINITE);
+	//-----------------------Critical Section-------------------------//
+	if (WaitRes != WAIT_OBJECT_0)
+	{
+		if (WaitRes == WAIT_ABANDONED)
+		{
+			printf("Some thread has previously exited without releasing a mutex."
+				" This is not good programming. Please fix the code.\n");
+			return (ISP_MUTEX_ABANDONED);
+		}
+		else
+			return(ISP_MUTEX_WAIT_FAILED);
+	}
+
+	if ((file = fopen("GameSession.txt", "r")) != NULL)
+	{
+		// file exists, another client is waiting
+		fclose(file);
+		ReleaseMutex(*mutexhandle);
+		//-----------------------out of Critical Section-------------------------//
+		error_flag = send_message_with_length("SERVER_INVITE", NULL, server_socket);
+		error_flag = send_message_with_length("SERVER_PLAYER_MOVE_REQUEST", NULL, server_socket);
+
+	}
+	else
+	{
+		// file does not exist, create file and wait for another player
+
+		file = fopen("GameSession.txt", "w");
+
+
+	}
+}
+int server_game_handler(char *username, SOCKET *server_socket, HANDLE *mutexhandle){
+	int error_flag = 0;
+	TransferResult_t SendRes;
+	TransferResult_t RecvRes;
+	TCHAR *rcv_buffer = NULL;
+	char send_message_buffer[MAX_MESSAGE_LEN], send_message_len_buffer[MESSAGE_LEN_AS_INT];
+	char *AcceptedStr = NULL;
+	//printf("Server: SERVER_APPROVED\n");
+	error_flag = send_message_with_length("SERVER_APPROVED", NULL, server_socket);
+	error_flag = send_message_with_length("SERVER_MAIN_MENU", NULL, server_socket);
+	if (error_flag == -1) {
+		printf("Service socket error while writing, closing thread.\n");
+		closesocket(*server_socket);
+		return 1;
+	}
+	while (TRUE) {
+		//*AcceptedStr = NULL;
+		RecvRes = ReceiveString(&rcv_buffer, *server_socket, "server");
+		if (RecvRes == TRNS_FAILED) {
+			printf("Service socket error occured while reading, closing thread.\n");
+			closesocket(*server_socket);
+			//return 1;
+		}
+		else if (RecvRes == TRNS_DISCONNECTED) {
+			printf("Connection error occured while reading, closing thread.\n");
+			//goto some_error;
+		}
+		printf("Server: rcv_buffer = :%s\n", rcv_buffer);
+		printf("Server: Going out of ReceiveString\n");
+		if (STRINGS_ARE_EQUAL(rcv_buffer, "CLIENT_VERSUS")) {
+			play_against_another_client(server_socket, mutexhandle);
+		}
+		else if (STRINGS_ARE_EQUAL(rcv_buffer, "CLIENT_CPU")) {
+			error_flag = play_against_server(server_socket);
+		}		
+		else if (STRINGS_ARE_EQUAL(rcv_buffer, "CLIENT_DISCONNECT")) {
+			closesocket(*server_socket);
+			}
+	}
+	free(AcceptedStr);
+	return error_flag;
+}
 
 
 
 //Service thread is the thread that opens for each successful client connection and "talks" to the client.
-static DWORD ServiceThread(SOCKET *t_socket)
+DWORD WINAPI ServiceThread(LPVOID lpParam)
 {
 	int error_flag = 0;
+	SOCKET* t_socket;
 	char username[MAX_USERNAME_LENGTH];
 	char *token = NULL, message_type[MAX_MESSAGE_LEN+1];
 	TCHAR *rcv_buffer = NULL;
+	ThreadInputs_t* pThreadArgs;
+	pThreadArgs = (ThreadInputs_t*)lpParam;
 	TransferResult_t RecvRes;
+	HANDLE mutexhandle;
 	RecvRes = ReceiveString(&rcv_buffer, *t_socket, "server");
-	printf("Server: rcv_buffer = %s\n", rcv_buffer);
-	if (RecvRes == TRNS_FAILED){
+	
+	mutexhandle = pThreadArgs->mutexhandle;
+	t_socket = &(pThreadArgs->socket);
+
+	printf("Server: rcv_buffer = :%s\n", rcv_buffer);
+	if (RecvRes == TRNS_FAILED){	
 		printf("Service socket error occured while reading, closing thread.\n");
 		closesocket(*t_socket);
 		//return 1;
@@ -194,8 +381,13 @@ static DWORD ServiceThread(SOCKET *t_socket)
 		if (STRINGS_ARE_EQUAL(message_type, "CLIENT_REQUEST")) {
 			//strcpy(send_buffer, "SERVER_APPROVED");
 			error_flag = send_message_with_length("SERVER_APPROVED", NULL, t_socket);
-			error_flag = server_game_handler(username, t_socket);
+			error_flag = server_game_handler(username, t_socket, &mutexhandle);
 		}
+		//if (SendRes == TRNS_FAILED){
+		//	printf("Service socket error while writing, closing thread.\n");
+		//	closesocket(*t_socket);
+		//	return 1;
+		//}	
 	}
 	closesocket(*t_socket);
 	return 0;
