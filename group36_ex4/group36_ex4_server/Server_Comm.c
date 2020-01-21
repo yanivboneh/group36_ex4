@@ -258,6 +258,7 @@ int play_against_another_client(SOCKET *server_socket, HANDLE *mutexhandle){
 	int error_flag = 0;
 	FILE *file;
 	DWORD WaitingTime = 30000;
+	TCHAR RecvRes = NULL;
 	DWORD WaitRes = WaitForSingleObject(*mutexhandle, INFINITE);
 	//-----------------------Critical Section-------------------------//
 	if (WaitRes != WAIT_OBJECT_0)
@@ -280,6 +281,7 @@ int play_against_another_client(SOCKET *server_socket, HANDLE *mutexhandle){
 		//-----------------------out of Critical Section-------------------------//
 		error_flag = send_message_with_length("SERVER_INVITE", NULL, server_socket);
 		error_flag = send_message_with_length("SERVER_PLAYER_MOVE_REQUEST", NULL, server_socket);
+		RecvRes = ReceiveString(&rcv_buffer, *server_socket, "server");
 
 	}
 	else
