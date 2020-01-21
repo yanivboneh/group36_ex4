@@ -17,19 +17,54 @@ Last updated by Amnon Drory, Winter 2011.
 #include "Socket_Shared.h"
 #include "Socket_Send_Recv_Tools.h"
 
-/*oOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoO*/
+
 
 SOCKET m_socket;
 
-/*oOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoO*/
 
-//Reading data coming from the server
+
+//SERVER_GAME_RESULTS:Server;server_move;your_move;who_won
+void split_parameters_into_strings(char* string_to_split, char*** parameters){//char** oponent_name, char** oponent_move, char** client_move, char** winner) {
+	char current_parameter[MAX_PARAMETERS_LENGTH], *string_copy = NULL;
+	int i = 0;
+	string_copy = (char*)malloc(strlen(string_to_split) * sizeof(char));
+	strcpy(string_copy, string_to_split);
+	while (*string_copy != '\0') {
+		while (*string_copy != ';') {
+			current_parameter[i] = *string_copy;
+			string_copy++;
+			i++;
+		}
+		**parameters = current_parameter;
+		i = 0;
+		parameters++;
+	}
+	//current_parameter = strtok(*string_to_split, ";");
+	//*oponent_name = current_parameter;
+	//current_parameter = strtok(NULL, ";");
+	//*oponent_move = current_parameter;
+	//current_parameter = strtok(NULL, ";");
+	//*client_move = current_parameter;
+	//current_parameter = strtok(NULL, ";");
+	//*winner = current_parameter;
+	//free(string_copy);
+}
+
 static DWORD RecvDataThread(void)
 {
 	TransferResult_t RecvRes;
-	while (1){
+	while (TRUE){
 		TCHAR *rcv_buffer = NULL;
+		char *token = NULL, message_type[MAX_MESSAGE_LEN], *parameters = NULL, *oponent_name = NULL, *oponent_move = NULL,
+			*client_move = NULL, *winner = NULL, **parameter_list = NULL;
 		RecvRes = ReceiveString(&rcv_buffer, m_socket, "client");
+		token = strtok(rcv_buffer, ":");
+		strcpy(message_type, rcv_buffer);
+		token = strtok(NULL, ":");
+		if (token != NULL) {
+			parameters = (char*)malloc(strlen(token) * sizeof(char));
+			strcpy(parameters, token);
+		}
 		printf("Client: rcv_buffer = %s\n", rcv_buffer);
 		if (RecvRes == TRNS_FAILED){
 			printf("Socket error while trying to write data to socket\n");
@@ -39,7 +74,7 @@ static DWORD RecvDataThread(void)
 			printf("Server closed connection. Bye!\n");
 			return 0x555;
 		}
-		else if (STRINGS_ARE_EQUAL(rcv_buffer, "SERVER_MAIN_MENU")) {
+		else if (STRINGS_ARE_EQUAL(message_type, "SERVER_MAIN_MENU")) {
 			printf("Choose what to do next:\n"
 				"1. Play against another client\n"
 				"2. Play against the server\n"
@@ -47,10 +82,19 @@ static DWORD RecvDataThread(void)
 				"4. Quit\n");
 			//printf("%s\n", AcceptedStr);
 		}
-		else if (STRINGS_ARE_EQUAL(rcv_buffer, "SERVER_PLAYER_MOVE_REQUEST")){
+		else if (STRINGS_ARE_EQUAL(message_type, "SERVER_PLAYER_MOVE_REQUEST")){
 			printf("Choose a move from the list: Rock, Paper, Scissors, Lizard or Spock:\n");
 		}
+		else if (STRINGS_ARE_EQUAL(message_type, "SERVER_GAME_RESULTS")) {   //SERVER_GAME_RESULTS:Server;server_move;your_move;who_won
+			split_parameters_into_strings(parameters, &parameter_list);// &oponent_name, &oponent_move, &client_move, &winner);
+			printf("You played: %s\n"
+				"%s played: %s\n"
+				"%s won!\n", client_move, oponent_name, oponent_move, winner);
+		}
 		free(rcv_buffer);
+			if (parameters != NULL) {
+				free(parameters);
+		}
 	}
 	return 0;
 }

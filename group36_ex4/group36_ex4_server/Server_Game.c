@@ -105,19 +105,17 @@ int play_against_another_client(SOCKET *server_socket, HANDLE *mutexhandle) {
 	}
 }
 
-int play_against_server(SOCKET *server_socket) {
+int play_against_server(SOCKET *server_socket, char *username) {
 	time_t t;
-	int random_server_move, error_flag = 0;
+	int random_server_move, error_flag = 0, game_result = 0;
 	char *server_move = NULL, *token = NULL;
-	//TransferResult_t SendRes;
 	TransferResult_t RecvRes;
-	//TCHAR *rcv_buffer = NULL;
-	//char *player_move = NULL;
 	srand((unsigned)time(&t));
 	random_server_move = rand() % 6 + 1;
 	server_move = get_server_move_as_string(random_server_move);
 	while (TRUE) {
-		char *player_move = NULL, message_type[MAX_MESSAGE_LEN + 1], parameters[MAX_PARAMETERS_LENGTH];
+		char player_move[MAX_MOVE_LEN], message_type[MAX_MESSAGE_LEN + 1], *parameters = NULL;
+		int parameters_len = 0;
 		TCHAR *rcv_buffer = NULL;
 		printf("Server: SERVER_PLAYER_MOVE_REQUEST\n");
 		error_flag = send_message_with_length("SERVER_PLAYER_MOVE_REQUEST", NULL, server_socket);
@@ -130,10 +128,9 @@ int play_against_server(SOCKET *server_socket) {
 		token = strtok(rcv_buffer, ":");
 		if (token != NULL) {
 			strcpy(message_type, token);
-			token = strtok(NULL, ":"); //extract username
-			strcpy(parameters, token);
+			token = strtok(NULL, ":");
+			strcpy(player_move, token);
 		}
-
 		if (RecvRes == TRNS_FAILED) {
 			printf("Service socket error occured while reading, closing thread.\n");
 			closesocket(*server_socket);
@@ -144,12 +141,32 @@ int play_against_server(SOCKET *server_socket) {
 			//goto some_error;
 		}
 		printf("Server: rcv_buffer = :%s\n", rcv_buffer);
-		if (who_is_the_winner(get_server_move_as_string(random_server_move), rcv_buffer) == 1) {
-			printf("Server won: %s > %s", get_server_move_as_string(random_server_move), rcv_buffer);
-		}
+		game_result = who_is_the_winner(get_server_move_as_string(random_server_move), player_move);
+		if (game_result == 1) {
+			printf("Server won: %s > %s", get_server_move_as_string(random_server_move), parameters);
+			parameters_len = 12 + (int)strlen(server_move) + (int)strlen(player_move) + 4;//12 = len of "Server"; 4 = len of 3 ';' + endofstring char
+			parameters = (char*)malloc(parameters_len * sizeof(char));
+			strcpy(parameters, "Server;");
+			strcat(parameters, server_move);
+			strcat(parameters, ";");
+			strcat(parameters, player_move);
+			strcat(parameters, ";");
+			strcat(parameters, "Server");
+			error_flag = send_message_with_length("SERVER_GAME_RESULTS", parameters, server_socket);
+		}                                                           //SERVER_GAME_RESULTS:Server;server_move;your_move;who_won
 		else {
-			printf("Server won: %s > %s", get_server_move_as_string(random_server_move), rcv_buffer);
+			printf("Player won: %s > %s", get_server_move_as_string(random_server_move), parameters);
+			parameters_len = 6+ (int)strlen(username) + (int)strlen(server_move) + (int)strlen(player_move) + 4;//6 = len of "Server"; 4 = len of 3 ';' + endofstring char
+			parameters = (char*)malloc(parameters_len * sizeof(char));
+			strcpy(parameters, "Server;");
+			strcat(parameters, server_move);
+			strcat(parameters, ";");
+			strcat(parameters, player_move);
+			strcat(parameters, ";");
+			strcat(parameters, username);
+			error_flag = send_message_with_length("SERVER_GAME_RESULTS", parameters, server_socket);
 		}
+		free(parameters);
 	}
 	return error_flag;
 }
@@ -185,7 +202,7 @@ int server_game_handler(char *username, SOCKET *server_socket, HANDLE *mutexhand
 			play_against_another_client(server_socket, mutexhandle);
 		}
 		else if (STRINGS_ARE_EQUAL(rcv_buffer, "CLIENT_CPU")) {
-			error_flag = play_against_server(server_socket);
+			error_flag = play_against_server(server_socket, username);
 		}
 		else if (STRINGS_ARE_EQUAL(rcv_buffer, "CLIENT_DISCONNECT")) {
 			closesocket(*server_socket);

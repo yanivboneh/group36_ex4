@@ -147,14 +147,6 @@ int send_message_with_length(char* message, char* parameters, SOCKET *server_soc
 		strcpy(send_message_buffer, message);
 		//strcat(send_message_buffer, "\n");
 	}
-	//_itoa(strlen(send_message_buffer), send_message_len_buffer, 10);
-	//SendRes = SendString(send_message_len_buffer, *server_socket);
-	//if (SendRes == TRNS_FAILED) {
-	//	printf("Service socket error while writing, closing thread.\n");
-	//	closesocket(*server_socket);
-	//	error_flag = -1;
-	//	goto exit;
-	//}
 	SendRes = SendString(send_message_buffer, *server_socket);
 	if (SendRes == TRNS_FAILED) {
 		printf("Service socket error while writing, closing thread.\n");
