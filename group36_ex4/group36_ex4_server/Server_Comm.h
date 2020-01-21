@@ -17,5 +17,12 @@ typedef struct _ThreadInputs_t {
 
 }ThreadInputs_t;
 
+typedef struct _ClientsDetails_t {
+	char first_player_user_name[100];
+	char second_player_user_name[100];
+	
+}ClientsDetails_t;
+
+ClientsDetails_t  ClientsDetails;
 
 #endif // 
