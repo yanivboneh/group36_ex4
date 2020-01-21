@@ -2,7 +2,6 @@
 #define _WINSOCK_DEPRECATED_NO_WARNINGS
 
 #include "Server_Game.h"
-#include "Server_Comm.h"
 #include "Socket_Shared.h"
 #include "Socket_Send_Recv_Tools.h"
 
@@ -66,20 +65,13 @@ int who_is_the_winner(char *player1_move, char *player2_move) {
 	return ret_val;
 }
 
-int play_against_another_client(SOCKET *server_socket, HANDLE *mutexhandle, char *username) {
-	int winner = 0;
+int play_against_another_client(SOCKET *server_socket, HANDLE *mutexhandle) {
 	int error_flag = 0;
 	FILE *file;
 	DWORD WaitingTime = 30000;
 	TCHAR RecvRes = NULL;
-	TCHAR *rcv_buffer = NULL;
-	char *player_move = NULL, message_type[MAX_MESSAGE_LEN + 1], *opponent_line[MAX_MESSAGE_LEN + 1];
-	char parameters[MAX_PARAMETERS_LENGTH], *token = NULL, *opponent_move[MAX_MESSAGE_LEN + 1], *opponent_username[MAX_MESSAGE_LEN + 1];
-	BOOL ReleaseRes = NULL;;
-	DWORD WaitRes = NULL;
-	//-----------------------Critical Section Start-------------------------//
-	 WaitRes = WaitForSingleObject(*mutexhandle, INFINITE);// wait for mutex to be released
-
+	DWORD WaitRes = WaitForSingleObject(*mutexhandle, INFINITE);
+	//-----------------------Critical Section-------------------------//
 	if (WaitRes != WAIT_OBJECT_0)
 	{
 		if (WaitRes == WAIT_ABANDONED)
@@ -94,205 +86,36 @@ int play_against_another_client(SOCKET *server_socket, HANDLE *mutexhandle, char
 
 	if ((file = fopen("GameSession.txt", "r")) != NULL)
 	{
-		/*                    file exists, another client is waiting, start session                */
-		strpy(ClientsDetails.second_player_user_name, username);
-		ReleaseRes = ReleaseMutex(*mutexhandle);
-		if (ReleaseRes == FALSE)
-			return (ISP_MUTEX_RELEASE_FAILED);
-		//------------------------------------Critical Section end---------------------------------//
-
-		/*----------------------------------------------------------------------------------------------
-									Send event: self is ready, mutex released
-		-----------------------------------------------------------------------------------------------*/
-
-		while (TRUE) {
-			fclose(file);
-			error_flag = send_message_with_length("SERVER_INVITE", NULL, server_socket);
-			if (error_flag == -1) {
-				printf("Service socket error while writing, closing thread.\n");
-				closesocket(*server_socket);
-				return 1;
-			}
-
-			error_flag = send_message_with_length("SERVER_PLAYER_MOVE_REQUEST", NULL, server_socket);
-			if (error_flag == -1) {
-				printf("Service socket error while writing, closing thread.\n");
-				closesocket(*server_socket);
-				return 1;
-			}
-
-			RecvRes = ReceiveString(&rcv_buffer, *server_socket, "server");
-			token = strtok(rcv_buffer, ":");
-			if (token != NULL) {
-				strcpy(message_type, token);
-				token = strtok(NULL, ":"); //extract move
-				strcpy(parameters, token);
-			}
-			if (RecvRes == TRNS_FAILED) {
-				printf("Service socket error occured while reading, closing thread.\n");
-				closesocket(*server_socket);
-				//return 1;
-			}
-			else if (RecvRes == TRNS_DISCONNECTED) {
-				printf("Connection error occured while reading, closing thread.\n");
-				//goto some_error;
-			}
-			if (STRINGS_ARE_EQUAL(message_type, "CLIENT_PLAYER_MOVE")) {
-				/*------------------------------------------------------------------------------------
-										Wait for event: opponent played, mutex released
-				-------------------------------------------------------------------------------------*/
-
-				//-----------------------Critical Section Start-------------------------//
-				
-				WaitRes = WaitForSingleObject(*mutexhandle, INFINITE);// wait for mutex to be released
-
-				if (WaitRes != WAIT_OBJECT_0)
-				{
-					if (WaitRes == WAIT_ABANDONED)
-					{
-						printf("Some thread has previously exited without releasing a mutex."
-							" This is not good programming. Please fix the code.\n");
-						return (ISP_MUTEX_ABANDONED);
-					}
-					else
-						return(ISP_MUTEX_WAIT_FAILED);
-				}
-				//Read opponents move
-				fgets(opponent_move, MAX_PARAMETERS_LENGTH,file);
-				
-				// Write self move
-				strcpy(player_move, parameters);
-				strcat(player_move, '\n');
-				rewind(file);
-				fputs(parameters, file); 
-				rewind(file);
-				fclose(file);
-				 /*----------------------------------------------------------------------------------------------
-												Send event: self played
-				-----------------------------------------------------------------------------------------------*/
-				ReleaseRes = ReleaseMutex(*mutexhandle);
-				if (ReleaseRes == FALSE)
-					return (ISP_MUTEX_RELEASE_FAILED);
-				//------------------------------------Critical Section end---------------------------------//
-	
-				//Check for winner
-				winner = who_is_the_winner(player_move, opponent_move);
-				//Send game result to client
-				if (winner == 1){
-						
-				}
-					//send your username as won 
-				//else{}
-				
-					//send opponents username as won 
-
-				//Send request for next steps SERVER_GAME_OVER_ MENU
-
-				//
-			}
-		}
+		// file exists, another client is waiting
+		fclose(file);
+		ReleaseMutex(*mutexhandle);
+		//-----------------------out of Critical Section-------------------------//
+		error_flag = send_message_with_length("SERVER_INVITE", NULL, server_socket);
+		error_flag = send_message_with_length("SERVER_PLAYER_MOVE_REQUEST", NULL, server_socket);
+		//RecvRes = ReceiveString(&rcv_buffer, *server_socket, "server");
 
 	}
 	else
-		/*              file does not exist, create file and wait for another player         */
 	{
-		
-		strpy(ClientsDetails.first_player_user_name, username);
+		// file does not exist, create file and wait for another player
+
 		file = fopen("GameSession.txt", "w");
-		fclose(file);
-
-		//Wait for another player
-		int tries = 0;
-		char validity_check = NULL;
-		while (tries < 15)
-		{
-
-			ReleaseRes = ReleaseMutex(*mutexhandle);
-			if (ReleaseRes == FALSE)
-				return (ISP_MUTEX_RELEASE_FAILED);
-
-			sleep(1);
-			WaitRes = WaitForSingleObject(*mutexhandle, INFINITE);// wait for mutex to be released
-			if (WaitRes != WAIT_OBJECT_0)
-			{
-				if (WaitRes == WAIT_ABANDONED)
-				{
-					printf("Some thread has previously exited without releasing a mutex."
-						" This is not good programming. Please fix the code.\n");
-					return (ISP_MUTEX_ABANDONED);
-				}
-				else
-					return(ISP_MUTEX_WAIT_FAILED);
-			}
-
-			
 
 
-			file = fopen("GameSession.txt", "r");
-			validity_check = (char)fgetc(file);
-			if (validity_check == '1') // Play ball
-			{
-				error_flag = send_message_with_length("SERVER_INVITE", NULL, server_socket);
-				if (error_flag == -1) {
-					printf("Service socket error while writing, closing thread.\n");
-					closesocket(*server_socket);
-					return 1;
-				}
-				error_flag = send_message_with_length("SERVER_PLAYER_MOVE_REQUEST", NULL, server_socket);
-				if (error_flag == -1) {
-					printf("Service socket error while writing, closing thread.\n");
-					closesocket(*server_socket);
-					return 1;
-				}
-				RecvRes = ReceiveString(&rcv_buffer, *server_socket, "server");
-				token = strtok(rcv_buffer, ":");
-				if (token != NULL) {
-					strcpy(message_type, token);
-					token = strtok(NULL, ":"); //extract move
-					strcpy(parameters, token);
-				}
-				if (RecvRes == TRNS_FAILED) {
-					printf("Service socket error occured while reading, closing thread.\n");
-					closesocket(*server_socket);
-					//return 1;
-				}
-				else if (RecvRes == TRNS_DISCONNECTED) {
-					printf("Connection error occured while reading, closing thread.\n");
-					//goto some_error;
-				}
-				if (STRINGS_ARE_EQUAL(message_type, "CLIENT_PLAYER_MOVE")) {
-					//Valid mwssage type, play ball
-					rewind(file);
-					fputs(parameters, file); // Write self move
-					fputc('\n', file);
-
-
-
-				}
-				else // If the opponent didnt aprove yet then wait
-				{
-					ReleaseRes = ReleaseMutex(*mutexhandle);
-					if (ReleaseRes == FALSE)
-						return (ISP_MUTEX_RELEASE_FAILED);
-				}
-			}
-		}
 	}
 }
 
-int play_against_server(SOCKET *server_socket) {
+int play_against_server(SOCKET *server_socket, char *username) {
 	time_t t;
-	int random_server_move, error_flag = 0;
+	int random_server_move, error_flag = 0, game_result = 0;
 	char *server_move = NULL, *token = NULL;
-	//TransferResult_t SendRes;
 	TransferResult_t RecvRes;
-	//TCHAR *rcv_buffer = NULL;
-	//char *player_move = NULL;
 	srand((unsigned)time(&t));
 	random_server_move = rand() % 6 + 1;
 	server_move = get_server_move_as_string(random_server_move);
 	while (TRUE) {
-		char *player_move = NULL, message_type[MAX_MESSAGE_LEN + 1], parameters[MAX_PARAMETERS_LENGTH];
+		char player_move[MAX_MOVE_LEN], message_type[MAX_MESSAGE_LEN + 1], *parameters = NULL;
+		int parameters_len = 0;
 		TCHAR *rcv_buffer = NULL;
 		printf("Server: SERVER_PLAYER_MOVE_REQUEST\n");
 		error_flag = send_message_with_length("SERVER_PLAYER_MOVE_REQUEST", NULL, server_socket);
@@ -305,10 +128,9 @@ int play_against_server(SOCKET *server_socket) {
 		token = strtok(rcv_buffer, ":");
 		if (token != NULL) {
 			strcpy(message_type, token);
-			token = strtok(NULL, ":"); //extract username
-			strcpy(parameters, token);
+			token = strtok(NULL, ":");
+			strcpy(player_move, token);
 		}
-
 		if (RecvRes == TRNS_FAILED) {
 			printf("Service socket error occured while reading, closing thread.\n");
 			closesocket(*server_socket);
@@ -319,12 +141,32 @@ int play_against_server(SOCKET *server_socket) {
 			//goto some_error;
 		}
 		printf("Server: rcv_buffer = :%s\n", rcv_buffer);
-		if ((get_server_move_as_string(random_server_move), rcv_buffer) == 1) {
-			printf("Server won: %s > %s", get_server_move_as_string(random_server_move), rcv_buffer);
-		}
+		game_result = who_is_the_winner(get_server_move_as_string(random_server_move), player_move);
+		if (game_result == 1) {
+			printf("Server won: %s > %s", get_server_move_as_string(random_server_move), parameters);
+			parameters_len = 12 + (int)strlen(server_move) + (int)strlen(player_move) + 4;//12 = len of "Server"; 4 = len of 3 ';' + endofstring char
+			parameters = (char*)malloc(parameters_len * sizeof(char));
+			strcpy(parameters, "Server;");
+			strcat(parameters, server_move);
+			strcat(parameters, ";");
+			strcat(parameters, player_move);
+			strcat(parameters, ";");
+			strcat(parameters, "Server");
+			error_flag = send_message_with_length("SERVER_GAME_RESULTS", parameters, server_socket);
+		}                                                           //SERVER_GAME_RESULTS:Server;server_move;your_move;who_won
 		else {
-			printf("Server won: %s > %s", get_server_move_as_string(random_server_move), rcv_buffer);
+			printf("Player won: %s > %s", get_server_move_as_string(random_server_move), parameters);
+			parameters_len = 6+ (int)strlen(username) + (int)strlen(server_move) + (int)strlen(player_move) + 4;//6 = len of "Server"; 4 = len of 3 ';' + endofstring char
+			parameters = (char*)malloc(parameters_len * sizeof(char));
+			strcpy(parameters, "Server;");
+			strcat(parameters, server_move);
+			strcat(parameters, ";");
+			strcat(parameters, player_move);
+			strcat(parameters, ";");
+			strcat(parameters, username);
+			error_flag = send_message_with_length("SERVER_GAME_RESULTS", parameters, server_socket);
 		}
+		free(parameters);
 	}
 	return error_flag;
 }
@@ -357,10 +199,10 @@ int server_game_handler(char *username, SOCKET *server_socket, HANDLE *mutexhand
 		printf("Server: rcv_buffer = :%s\n", rcv_buffer);
 		printf("Server: Going out of ReceiveString\n");
 		if (STRINGS_ARE_EQUAL(rcv_buffer, "CLIENT_VERSUS")) {
-			play_against_another_client(server_socket, mutexhandle, username);
+			play_against_another_client(server_socket, mutexhandle);
 		}
 		else if (STRINGS_ARE_EQUAL(rcv_buffer, "CLIENT_CPU")) {
-			error_flag = play_against_server(server_socket);
+			error_flag = play_against_server(server_socket, username);
 		}
 		else if (STRINGS_ARE_EQUAL(rcv_buffer, "CLIENT_DISCONNECT")) {
 			closesocket(*server_socket);
