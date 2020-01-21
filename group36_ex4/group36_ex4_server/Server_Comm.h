@@ -15,7 +15,7 @@ typedef struct _ThreadInputs_t {
 	HANDLE mutexhandle;
 	SOCKET socket;
 
-}ThreadInputs_t
+}ThreadInputs_t;
 
 
 #endif // 

@@ -27,7 +27,7 @@ int MainServer(char *port_num_str)
 	SOCKADDR_IN service;
 	WSADATA wsaData;
 	int StartupRes = WSAStartup(MAKEWORD(2, 2), &wsaData);
-	LPCTSTR MutexName = _T("MutexName");
+	LPCTSTR MutexName = ("MutexName");
 	HANDLE MutexHandle;
 
 	MutexHandle = CreateMutex(			//Create mutex to secure writing into game file
@@ -281,7 +281,7 @@ int play_against_another_client(SOCKET *server_socket, HANDLE *mutexhandle){
 		//-----------------------out of Critical Section-------------------------//
 		error_flag = send_message_with_length("SERVER_INVITE", NULL, server_socket);
 		error_flag = send_message_with_length("SERVER_PLAYER_MOVE_REQUEST", NULL, server_socket);
-		RecvRes = ReceiveString(&rcv_buffer, *server_socket, "server");
+		//RecvRes = ReceiveString(&rcv_buffer, *server_socket, "server");
 
 	}
 	else
@@ -350,10 +350,11 @@ DWORD WINAPI ServiceThread(LPVOID lpParam)
 	pThreadArgs = (ThreadInputs_t*)lpParam;
 	TransferResult_t RecvRes;
 	HANDLE mutexhandle;
-	RecvRes = ReceiveString(&rcv_buffer, *t_socket, "server");
+	
 	
 	mutexhandle = pThreadArgs->mutexhandle;
 	t_socket = &(pThreadArgs->socket);
+	RecvRes = ReceiveString(&rcv_buffer, *t_socket, "server");
 
 	printf("Server: rcv_buffer = :%s\n", rcv_buffer);
 	if (RecvRes == TRNS_FAILED){	
