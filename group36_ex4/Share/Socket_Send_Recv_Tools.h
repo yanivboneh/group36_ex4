@@ -98,6 +98,4 @@ TransferResult_t ReceiveString( char** OutputStrPtr, SOCKET sd, char* client_or_
 int send_message_with_length(char* message, char* parameters, SOCKET *server_socket);
 
 
-/*oOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoO*/
-
 #endif // SOCKET_SEND_RECV_TOOLS_H

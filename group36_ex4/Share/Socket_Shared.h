@@ -14,6 +14,7 @@
 #define SERVER_PORT 2345
 #define MAX_USERNAME_LENGTH 20
 #define MAX_MESSAGE_LEN 26//The longest message length is 26 charecters
+#define MAX_PARAMETERS_LENGTH 20
 #define MESSAGE_LEN_AS_INT 2
 #define STRINGS_ARE_EQUAL( Str1, Str2 ) ( strcmp( (Str1), (Str2) ) == 0 )
 #define ROCK "ROCK"

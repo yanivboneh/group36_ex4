@@ -133,11 +133,13 @@
     <ClCompile Include="..\Share\Socket_Send_Recv_Tools.c" />
     <ClCompile Include="main.c" />
     <ClCompile Include="Server_Comm.c" />
+    <ClCompile Include="Server_Game.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\Share\Socket_Send_Recv_Tools.h" />
     <ClInclude Include="..\Share\Socket_Shared.h" />
     <ClInclude Include="Server_Comm.h" />
+    <ClInclude Include="Server_Game.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

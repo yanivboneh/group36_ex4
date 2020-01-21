@@ -6,7 +6,7 @@
 Last updated by Amnon Drory, Winter 2011.
  */
  /*oOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoO*/
-
+#define _CRT_SECURE_NO_WARNINGS
 #define _WINSOCK_DEPRECATED_NO_WARNINGS
 
 #include <stdio.h>
@@ -28,8 +28,9 @@ static DWORD RecvDataThread(void)
 {
 	TransferResult_t RecvRes;
 	while (1){
-		char *AcceptedStr = NULL;
-		RecvRes = ReceiveString(&AcceptedStr, m_socket, "client");
+		TCHAR *rcv_buffer = NULL;
+		RecvRes = ReceiveString(&rcv_buffer, m_socket, "client");
+		printf("Client: rcv_buffer = %s\n", rcv_buffer);
 		if (RecvRes == TRNS_FAILED){
 			printf("Socket error while trying to write data to socket\n");
 			return 0x555;
@@ -38,7 +39,7 @@ static DWORD RecvDataThread(void)
 			printf("Server closed connection. Bye!\n");
 			return 0x555;
 		}
-		else if (STRINGS_ARE_EQUAL(AcceptedStr, "SERVER_MAIN_MENU")) {
+		else if (STRINGS_ARE_EQUAL(rcv_buffer, "SERVER_MAIN_MENU")) {
 			printf("Choose what to do next:\n"
 				"1. Play against another client\n"
 				"2. Play against the server\n"
@@ -46,54 +47,68 @@ static DWORD RecvDataThread(void)
 				"4. Quit\n");
 			//printf("%s\n", AcceptedStr);
 		}
-		else if (STRINGS_ARE_EQUAL(AcceptedStr, "SERVER_PLAYER_MOVE_REQUEST")){
-			printf("%s\n", AcceptedStr);
+		else if (STRINGS_ARE_EQUAL(rcv_buffer, "SERVER_PLAYER_MOVE_REQUEST")){
+			printf("Choose a move from the list: Rock, Paper, Scissors, Lizard or Spock:\n");
 		}
-		free(AcceptedStr);
+		free(rcv_buffer);
 	}
 	return 0;
 }
 
-/*oOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoO*/
-
-//Sending data to the server
+//void string_to_upper_case_string(char* input_buffer, char** output_buffer) {
+//	int i = 0;
+//	char *end_of_string = '\0';
+//	while (input_buffer[i] != '\0') {
+//		if (input_buffer[i] >= 'a' && input_buffer[i] <= 'z') {
+//			**output_buffer = input_buffer[i] - 32;
+//		}
+//		else {
+//			**output_buffer = input_buffer[i];
+//		}
+//		i++;
+//		output_buffer++;
+//	}
+//	strcat(*output_buffer, *end_of_string);
+//}
 static DWORD SendDataThread(LPVOID lpParam)
 {
 	DWORD ret_val = 0;
-	int i = 0;
-	char client_choice, input_buffer[MAX_MESSAGE_LEN];
-	TransferResult_t SendRes;
+	int i = 0, error_flag = 0;
+	char input_buffer[MAX_MESSAGE_LEN], *send_buffer = NULL;
 	while (TRUE)
 	{
-		char send_buffer[MAX_MESSAGE_LEN];
 		gets_s(input_buffer, sizeof(input_buffer));
-		while (send_buffer[i] != '\0'){
-			if (input_buffer[i] >= 'a' && input_buffer[i] <= 'z')
-				input_buffer[i] = input_buffer[i] - 32;
-			i++;
+		//input_buffer = (char*)malloc((strlen(input_buffer) + 1) * sizeof(char));
+		if (strlen(input_buffer) > 1) {
+			_strupr(input_buffer);
 		}
+		//else {
+		//	strcpy(input_buffer, input_buffer);
+		//}
+		//string_to_upper_case_string(input_buffer, &input_buffer);
 		if (STRINGS_ARE_EQUAL(input_buffer, "1"))
-			sprintf(send_buffer, "CLIENT_VERSUS");
+			error_flag = send_message_with_length("CLIENT_VERSUS", NULL, &m_socket);
 		else if (STRINGS_ARE_EQUAL(input_buffer, "2"))
-			strcpy(send_buffer, "CLIENT_CPU");
+			error_flag = send_message_with_length("CLIENT_CPU", NULL, &m_socket);
 		else if (STRINGS_ARE_EQUAL(input_buffer, "3"))
-			strcpy(send_buffer, "CLIENT_LEADERBOARD");
+			error_flag = send_message_with_length("CLIENT_LEADERBOARD", NULL, &m_socket);
 		else if (STRINGS_ARE_EQUAL(input_buffer, "4")) {
-			strcpy(send_buffer, "CLIENT_DISCONNECT");
+			error_flag = send_message_with_length("CLIENT_DISCONNECT", NULL, &m_socket);
 			//return 0x555; //"4" signals an exit from the client side
 		}
 		else if (STRINGS_ARE_EQUAL(input_buffer, "ROCK") || STRINGS_ARE_EQUAL(input_buffer, "PAPER") ||
 			STRINGS_ARE_EQUAL(input_buffer, "SCISSORS") || STRINGS_ARE_EQUAL(input_buffer, "LIZARD")
 			|| STRINGS_ARE_EQUAL(input_buffer, "SPOCK")) {
-			strcpy(send_buffer, strcat("CLIENT_PLAYER_MOVE:", input_buffer));
+			error_flag = send_message_with_length("CLIENT_PLAYER_MOVE", input_buffer, &m_socket);
 		}
-		SendRes = SendString(send_buffer, m_socket);
-		if (SendRes == TRNS_FAILED){
+		//SendRes = SendString(input_buffer, m_socket);
+		if (error_flag == -1){
 			printf("Socket error while trying to write data to socket\n");
 			ret_val = 0x555;
 			break;
 		}
 	}
+	free(send_buffer);
 	return ret_val;
 }
 
@@ -161,9 +176,7 @@ reconnecting:
 			}
 			char* AcceptedStr = NULL;
 			char* message_type = NULL;
-			printf("Client: Going into ReceiveString\n");
 			RecvRes = ReceiveString(&AcceptedStr, m_socket, "client");
-			printf("Client: Going out of ReceiveString\n");
 			if (RecvRes == TRNS_FAILED){
 				printf("Socket error while trying to write data to socket\n");
 				return 0x555;
