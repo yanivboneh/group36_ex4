@@ -5,4 +5,23 @@
 
 int server_game_handler(char *username, SOCKET *server_socket, HANDLE *mutexhandle);
 
+typedef struct _ThreadInputs_t {
+	HANDLE mutexhandle;
+	SOCKET socket;
+
+}ThreadInputs_t;
+
+typedef struct _ClientsDetails_t {
+	char player_user_name[100];
+	HANDLE player_event;
+
+}ClientsDetails_t;
+
+ClientsDetails_t  *pFirst_player;
+ClientsDetails_t  *pSecond_player;
+
+
+
+
+
 #endif

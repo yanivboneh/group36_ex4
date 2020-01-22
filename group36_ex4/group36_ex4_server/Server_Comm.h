@@ -11,11 +11,6 @@
 
 int MainServer(char *port_num);
 
-typedef struct _ThreadInputs_t {
-	HANDLE mutexhandle;
-	SOCKET socket;
-
-}ThreadInputs_t;
 
 
 #endif // 
