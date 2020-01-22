@@ -14,6 +14,8 @@
 #define SERVER_PORT 2345
 #define MAX_USERNAME_LENGTH 20
 #define MAX_MESSAGE_LEN 26//The longest message length is 26 charecters
+#define MAX_NUM_OF_PARAMETERS 4
+#define MAX_LEN_OF_PARAMETERS 59//2 usernames = 40, 2 game moves = 8, 3 times ';'  = 3
 #define MAX_PARAMETERS_LENGTH 20
 #define MAX_MOVE_LEN 8
 #define MESSAGE_LEN_AS_INT 2
