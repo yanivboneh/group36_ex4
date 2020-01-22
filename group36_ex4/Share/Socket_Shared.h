@@ -12,6 +12,7 @@
 
 #define SERVER_ADDRESS_STR "127.0.0.1"
 #define SERVER_PORT 2345
+#define TIME_OUT_IN_MSEC 15000
 #define MAX_USERNAME_LENGTH 20
 #define MAX_MESSAGE_LEN 26//The longest message length is 26 charecters
 #define MAX_NUM_OF_PARAMETERS 4

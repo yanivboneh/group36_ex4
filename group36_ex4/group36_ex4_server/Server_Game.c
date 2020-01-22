@@ -138,7 +138,7 @@ int play_against_server(SOCKET *server_socket, char *username) {
 		closesocket(*server_socket);
 		return 1;
 	}
-	RecvRes = ReceiveString(&rcv_buffer, *server_socket, "server");
+	RecvRes = ReceiveString(&rcv_buffer, *server_socket, TIME_OUT_IN_MSEC);
 	token = strtok(rcv_buffer, ":");
 	if (token != NULL) {
 		strcpy(message_type, token);
@@ -173,7 +173,6 @@ int play_against_server(SOCKET *server_socket, char *username) {
 int server_game_handler(char *username, SOCKET *server_socket, HANDLE *mutexhandle) {
 	int error_flag = 0;
 	TransferResult_t RecvRes;
-	TCHAR *rcv_buffer = NULL;
 	char *AcceptedStr = NULL;
 	//printf("Server: SERVER_APPROVED\n");
 	error_flag = send_message_with_length("SERVER_APPROVED", NULL, server_socket);
@@ -186,7 +185,7 @@ main_menu:
 	}
 	while (TRUE) {
 		TCHAR *rcv_buffer = NULL;
-		RecvRes = ReceiveString(&rcv_buffer, *server_socket, "server");
+		RecvRes = ReceiveString(&rcv_buffer, *server_socket, TIME_OUT_IN_MSEC);
 		if (RecvRes == TRNS_FAILED) {
 			printf("Service socket error occured while reading, closing thread.\n");
 			closesocket(*server_socket);

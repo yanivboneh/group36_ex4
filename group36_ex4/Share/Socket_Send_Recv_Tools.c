@@ -14,6 +14,7 @@
 #include "Socket_Shared.h"
 #include <stdio.h>
 #include <string.h>
+#include <time.h>
 
 /*oOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoO*/
 
@@ -61,12 +62,23 @@ TransferResult_t SendString( const char *Str, SOCKET sd )
 
 /*oOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoO*/
 
-TransferResult_t ReceiveBuffer( char* OutputBuffer, int BytesToReceive, SOCKET sd, char *client_or_server )
+TransferResult_t ReceiveBuffer( char* OutputBuffer, int BytesToReceive, SOCKET sd, int time_out_in_msec )
 {
 	char* CurPlacePtr = OutputBuffer;
 	int BytesJustTransferred;
 	int RemainingBytesToReceive = BytesToReceive;
+
+	struct timeval timeout;
+	timeout.tv_sec = time_out_in_msec;
+	timeout.tv_usec = 0;
+
 	while ( RemainingBytesToReceive > 0 )  {
+		if (setsockopt(sd, SOL_SOCKET, SO_RCVTIMEO, (char *)&timeout,
+			sizeof(timeout)) < 0) {
+			printf("Recv timeout expired\n");
+			return TRNS_FAILED;
+		}
+
 		/* send does not guarantee that the entire message is sent */
 		BytesJustTransferred = recv(sd, CurPlacePtr, RemainingBytesToReceive, 0);
 		if ( BytesJustTransferred == SOCKET_ERROR ) 
@@ -86,7 +98,7 @@ TransferResult_t ReceiveBuffer( char* OutputBuffer, int BytesToReceive, SOCKET s
 
 /*oOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoO*/
 
-TransferResult_t ReceiveString( char** OutputStrPtr, SOCKET sd, char *client_or_server)
+TransferResult_t ReceiveString( char** OutputStrPtr, SOCKET sd, int time_out_in_msec)
 {
 	/* Recv the the request to the server on socket sd */
 	int TotalStringSizeInBytes;
@@ -107,7 +119,7 @@ TransferResult_t ReceiveString( char** OutputStrPtr, SOCKET sd, char *client_or_
 	RecvRes = ReceiveBuffer( 
 		(char *)( &TotalStringSizeInBytes ),
 		(int)( sizeof(TotalStringSizeInBytes) ), // 4 bytes
-		sd, client_or_server);
+		sd, time_out_in_msec);
 
 	if ( RecvRes != TRNS_SUCCEEDED ) return RecvRes;
 
@@ -119,7 +131,7 @@ TransferResult_t ReceiveString( char** OutputStrPtr, SOCKET sd, char *client_or_
 	RecvRes = ReceiveBuffer( 
 		(char *)( StrBuffer ),
 		(int)( TotalStringSizeInBytes), 
-		sd, client_or_server);
+		sd, time_out_in_msec);
 
 	if ( RecvRes == TRNS_SUCCEEDED ) 
 		{ *OutputStrPtr = StrBuffer; }

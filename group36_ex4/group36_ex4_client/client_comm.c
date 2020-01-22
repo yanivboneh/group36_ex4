@@ -47,12 +47,11 @@ static DWORD RecvDataThread(void)
 	while (TRUE){
 		TCHAR *rcv_buffer = NULL;
 		char *token = NULL, message_type[MAX_MESSAGE_LEN+1], parameters[MAX_LEN_OF_PARAMETERS+1], *parameter_list[MAX_NUM_OF_PARAMETERS];
-		RecvRes = ReceiveString(&rcv_buffer, m_socket, "client");
+		RecvRes = ReceiveString(&rcv_buffer, m_socket, TIME_OUT_IN_MSEC);
 		token = strtok(rcv_buffer, ":");
 		strcpy(message_type, rcv_buffer);
 		token = strtok(NULL, ":");
 		if (token != NULL) {
-			//parameters = (char*)malloc(strlen(token) * sizeof(char));
 			strcpy(parameters, token);
 		}
 		if (RecvRes == TRNS_FAILED){
@@ -209,7 +208,7 @@ reconnecting:
 			}
 			char* AcceptedStr = NULL;
 			char* message_type = NULL;
-			RecvRes = ReceiveString(&AcceptedStr, m_socket, "client");
+			RecvRes = ReceiveString(&AcceptedStr, m_socket, TIME_OUT_IN_MSEC);
 			if (RecvRes == TRNS_FAILED){
 				printf("Socket error while trying to write data to socket\n");
 				return 0x555;

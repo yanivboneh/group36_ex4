@@ -179,7 +179,7 @@ DWORD WINAPI ServiceThread(LPVOID lpParam)
 	HANDLE mutexhandle;
 	mutexhandle = pThreadArgs->mutexhandle;
 	t_socket = &(pThreadArgs->socket);
-	RecvRes = ReceiveString(&rcv_buffer, *t_socket, "server");
+	RecvRes = ReceiveString(&rcv_buffer, *t_socket, TIME_OUT_IN_MSEC);
 	printf("Server: rcv_buffer = :%s\n", rcv_buffer);
 	if (RecvRes == TRNS_FAILED){	
 		printf("Service socket error occured while reading, closing thread.\n");
@@ -206,15 +206,9 @@ DWORD WINAPI ServiceThread(LPVOID lpParam)
 			return 1;
 		}
 		if (STRINGS_ARE_EQUAL(message_type, "CLIENT_REQUEST")) {
-			//strcpy(send_buffer, "SERVER_APPROVED");
 			error_flag = send_message_with_length("SERVER_APPROVED", NULL, t_socket);
 			error_flag = server_game_handler(username, t_socket, &mutexhandle);
 		}
-		//if (SendRes == TRNS_FAILED){
-		//	printf("Service socket error while writing, closing thread.\n");
-		//	closesocket(*t_socket);
-		//	return 1;
-		//}	
 	}
 	closesocket(*t_socket);
 	return 0;
