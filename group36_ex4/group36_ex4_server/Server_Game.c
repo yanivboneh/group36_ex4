@@ -402,27 +402,8 @@ int play_against_another_client(SOCKET *server_socket, HANDLE *mutexhandle, char
 			closesocket(*server_socket);
 			return 1;
 		}
-		//Receive and handle game over menu 
-		RecvRes = ReceiveString(&rcv_buffer, *server_socket, "server");
-		if (RecvRes == TRNS_FAILED) {
-			printf("Service socket error occured while reading, closing thread.\n");
-			closesocket(*server_socket);
-			//return 1;
-		}
-		else if (RecvRes == TRNS_DISCONNECTED) {
-			printf("Connection error occured while reading, closing thread.\n");
-			//goto some_error;
-		}
-		printf("Server: rcv_buffer = :%s\n", rcv_buffer);
-		printf("Server: Going out of ReceiveString\n");
-		if (STRINGS_ARE_EQUAL(rcv_buffer, "CLIENT_REPLAY")) {
-			play_against_another_client(server_socket, &mutexhandle, username);
-		}
-		else if (STRINGS_ARE_EQUAL(rcv_buffer, "CLIENT_MAIN_MENU")) {
-			error_flag = server_game_handler(username, server_socket, &mutexhandle);
-		}
-		free(rcv_buffer);
-		rcv_buffer = NULL;
+		error_flag = server_game_handler(username, server_socket, &mutexhandle);
+		
 }
 
 int play_against_server(SOCKET *server_socket) {
