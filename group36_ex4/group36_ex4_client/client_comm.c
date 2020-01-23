@@ -56,11 +56,11 @@ static DWORD RecvDataThread(void)
 		}
 		if (RecvRes == TRNS_FAILED) {
 			printf("Socket error while trying to write data to socket\n");
-			return 0x555;
+			//return 0x555;
 		}
 		else if (RecvRes == TRNS_DISCONNECTED) {
 			printf("Server closed connection. Bye!\n");
-			return 0x555;
+			//return 0x555;
 		}
 		else if (STRINGS_ARE_EQUAL(message_type, "SERVER_MAIN_MENU")) {
 			printf("Choose what to do next:\n"
@@ -211,7 +211,7 @@ reconnecting:
 			RecvRes = ReceiveString(&AcceptedStr, m_socket, TIME_OUT_IN_MSEC);
 			if (RecvRes == TRNS_FAILED) {
 				printf("Socket error while trying to write data to socket\n");
-				return 0x555;
+				//return 0x555;
 			}
 			if (STRINGS_ARE_EQUAL(AcceptedStr, "SERVER_APPROVED")) {
 				printf("Client: SERVER_APPROVED\n");

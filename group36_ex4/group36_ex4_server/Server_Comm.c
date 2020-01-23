@@ -6,14 +6,14 @@
 #include <stdbool.h>
 #include <winsock2.h>
 #include <time.h>
+#include "Server_Game.h"
 #include "Socket_Send_Recv_Tools.h"
 #include "Server_Comm.h"
 #include "Socket_Shared.h"
-#include "Server_Game.h"
+
 
 HANDLE ThreadHandles[NUM_OF_WORKER_THREADS];
 ThreadInputs_t ThreadInputs[NUM_OF_WORKER_THREADS];
-
 static int FindFirstUnusedThreadSlot();
 static void CleanupWorkerThreads();
 DWORD WINAPI  ServiceThread(SOCKET *t_socket);
@@ -96,6 +96,8 @@ int MainServer(char *port_num_str)
 				NULL
 			);
 		}
+	
+		
 	} // for ( Loop = 0; Loop < MAX_LOOPS; Loop++ )
 
 server_cleanup_3:

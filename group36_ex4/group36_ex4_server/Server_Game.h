@@ -2,7 +2,6 @@
 #define SERVER_GAME_H
 
 #include <winsock2.h>
-
 int server_game_handler(char *username, SOCKET *server_socket, HANDLE *mutexhandle);
 
 typedef struct _ThreadInputs_t {
@@ -23,7 +22,6 @@ ClientsDetails_t  First_player;
 ClientsDetails_t  Second_player;
 
 
-;
 
 
 
