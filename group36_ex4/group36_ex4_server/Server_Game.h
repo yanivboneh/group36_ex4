@@ -17,8 +17,13 @@ typedef struct _ClientsDetails_t {
 
 }ClientsDetails_t;
 
-ClientsDetails_t  *pFirst_player;
-ClientsDetails_t  *pSecond_player;
+
+
+ClientsDetails_t  First_player;
+ClientsDetails_t  Second_player;
+
+
+;
 
 
 
