@@ -87,7 +87,7 @@ int play_against_another_client(SOCKET *server_socket, HANDLE *mutexhandle, char
 	DWORD WaitingTime = 15000;
 	TCHAR RecvRes = NULL;
 	TCHAR *rcv_buffer = NULL;
-	char *player_move = NULL, message_type[MAX_MESSAGE_LEN + 1], invite_message[100], result_message[100],  *position_ptr;
+	char *player_move = NULL, message_type[MAX_MESSAGE_LEN + 1], invite_message[100], result_message[100], *position_ptr;
 	char parameters[MAX_PARAMETERS_LENGTH], *token = NULL, *opponent_move[MAX_MESSAGE_LEN + 1], opponent_username[MAX_MESSAGE_LEN + 1];
 	BOOL ReleaseRes = NULL;
 	DWORD WaitRes = NULL;
@@ -97,193 +97,83 @@ int play_against_another_client(SOCKET *server_socket, HANDLE *mutexhandle, char
 	pFirst_player->player_event = CreateEvent(NULL, FALSE, FALSE, "first_player_event");
 
 
-		//-----------------------Critical Section Start-------------------------//
-		WaitRes = WaitForSingleObject(*mutexhandle, INFINITE);// wait for mutex to be released
+	//-----------------------Critical Section Start-------------------------//
+	WaitRes = WaitForSingleObject(*mutexhandle, INFINITE);// wait for mutex to be released
 
-		if (WaitRes != WAIT_OBJECT_0)
+	if (WaitRes != WAIT_OBJECT_0)
+	{
+		if (WaitRes == WAIT_ABANDONED)
 		{
-			if (WaitRes == WAIT_ABANDONED)
-			{
-				printf("Some thread has previously exited without releasing a mutex."
-					" This is not good programming. Please fix the code.\n");
-				return (ISP_MUTEX_ABANDONED);
-			}
-			else
-				return(ISP_MUTEX_WAIT_FAILED);
-		}
-
-		if ((file = fopen("GameSession.txt", "r")) != NULL)
-		{
-			/*                    file exists, another client is waiting, start session                */
-			strcpy(pSecond_player->player_user_name, username);
-			ReleaseRes = ReleaseMutex(*mutexhandle);
-			if (ReleaseRes == FALSE)
-				return (ISP_MUTEX_RELEASE_FAILED);
-			
-			//------------------------------------Critical Section end---------------------------------//
-
-			/*----------------------------------------------------------------------------------------------
-										Send event: self is ready, mutex released
-			-----------------------------------------------------------------------------------------------*/
-			SetEvent(pSecond_player->player_event);
-			printf("Server sent message: user %s set event ready\n", username);
-
-			strcpy(invite_message, "SERVER_INVITE:");
-			strcat(invite_message, pFirst_player->player_user_name);
-			error_flag = send_message_with_length(invite_message, NULL, server_socket);
-			printf("Server sent message:%s\n", invite_message);
-			if (error_flag == -1) {
-				printf("Service socket error while writing, closing thread.\n");
-				closesocket(*server_socket);
-				return 1;
-			}
-			free(rcv_buffer);
-			rcv_buffer = NULL;
-			error_flag = send_message_with_length("SERVER_PLAYER_MOVE_REQUEST", NULL, server_socket);
-			printf("Server sent message:%s\n", "SERVER_PLAYER_MOVE_REQUEST");
-			if (error_flag == -1) {
-				printf("Service socket error while writing, closing thread.\n");
-				closesocket(*server_socket);
-				return 1;
-			}
-			//wait for reply
-			RecvRes = ReceiveString(&rcv_buffer, *server_socket, 300000);
-			printf("Server sent message: user %s message type: %s\n", username, rcv_buffer);
-
-			strcpy(message_type, rcv_buffer);
-			message_type[17] = '\0';
-			strcpy(player_move, message_type[18]);
-			if (RecvRes == TRNS_FAILED) {
-				printf("Service socket error occured while reading, closing thread.\n");
-				closesocket(*server_socket);
-				//return 1;
-			}
-			else if (RecvRes == TRNS_DISCONNECTED) {
-				printf("Connection error occured while reading, closing thread.\n");
-				//goto some_error;
-			}
-			printf("Server sent message: user %s message type: %s\n", username, message_type);
-
-			if (STRINGS_ARE_EQUAL(message_type, "CLIENT_PLAYER_MOVE")) {
-				printf("Server sent message: user %s move: %s\n", username, player_move);
-
-				/*------------------------------------------------------------------------------------
-										Wait for event: opponent played, mutex released
-				-------------------------------------------------------------------------------------*/
-				WaitRes = WaitForSingleObject(pFirst_player->player_event, INFINITE);// wait for event
-
-				if (WaitRes != WAIT_OBJECT_0)
-				{
-					if (WaitRes == WAIT_ABANDONED)
-					{
-						printf("Some thread has previously exited without releasing a mutex."
-							" This is not good programming. Please fix the code.\n");
-						return (ISP_MUTEX_ABANDONED);
-					}
-					else
-						return(ISP_MUTEX_WAIT_FAILED);
-				}
-				//-----------------------Critical Section Start-------------------------//
-
-				WaitRes = WaitForSingleObject(*mutexhandle, INFINITE);// wait for mutex to be released
-
-				if (WaitRes != WAIT_OBJECT_0)
-				{
-					if (WaitRes == WAIT_ABANDONED)
-					{
-						printf("Some thread has previously exited without releasing a mutex."
-							" This is not good programming. Please fix the code.\n");
-						return (ISP_MUTEX_ABANDONED);
-					}
-					else
-						return(ISP_MUTEX_WAIT_FAILED);
-				}
-				//Read opponents move
-				fgets(opponent_move, MAX_PARAMETERS_LENGTH, file);
-
-				// Write self move
-				strcat(player_move, '\n');
-				rewind(file);
-				fputs(player_move, file);
-				rewind(file);
-				fclose(file);
-				/*----------------------------------------------------------------------------------------------
-											   Send event: self played
-			   -----------------------------------------------------------------------------------------------*/
-				SetEvent(pSecond_player->player_event);
-				ReleaseRes = ReleaseMutex(*mutexhandle);
-				if (ReleaseRes == FALSE)
-					return (ISP_MUTEX_RELEASE_FAILED);
-				//------------------------------------Critical Section end---------------------------------//
-
-				//Check for winner
-				winner = who_is_the_winner(player_move, opponent_move);
-				//Send game result to client
-				strcpy(result_message, "SERVER_GAME_RESULT:");
-				strcat(result_message, pFirst_player->player_user_name); strcat(result_message, ";");
-				strcat(result_message, opponent_move); strcat(result_message, ";");
-				strcat(result_message, player_move); strcat(result_message, ";");
-
-
-				if (winner == 1) {//send your username as won 
-
-					strcat(result_message, username);
-					error_flag = send_message_with_length(result_message, NULL, server_socket);
-					printf("Server sent message:%s\n", result_message);
-
-					if (error_flag == -1) {
-						printf("Service socket error while writing, closing thread.\n");
-						closesocket(*server_socket);
-						return 1;
-					}
-
-
-				}
-
-				else {//send opponents username as won 
-					strcat(result_message, pFirst_player->player_user_name);
-					error_flag = send_message_with_length(result_message, NULL, server_socket);
-					printf("Server sent message:%s\n", result_message);
-					if (error_flag == -1) {
-						printf("Service socket error while writing, closing thread.\n");
-						closesocket(*server_socket);
-						return 1;
-					}
-				}
-
-
-
-				//Send request for next steps SERVER_GAME_OVER_ MENU
-
-
-				//
-			}
-
-
+			printf("Some thread has previously exited without releasing a mutex."
+				" This is not good programming. Please fix the code.\n");
+			return (ISP_MUTEX_ABANDONED);
 		}
 		else
-			/*              file does not exist, create file and wait for another player         */
-		{
-			
-			strcpy(pFirst_player->player_user_name, username);
-			file = fopen("GameSession.txt", "w");
-			fclose(file);
-			ReleaseRes = ReleaseMutex(*mutexhandle);
-			if (ReleaseRes == FALSE)
-				return (ISP_MUTEX_RELEASE_FAILED);
-			//------------------------------------Critical Section end---------------------------------//
+			return(ISP_MUTEX_WAIT_FAILED);
+	}
+
+	if ((file = fopen("GameSession.txt", "r")) != NULL)
+	{
+		/*                    file exists, another client is waiting, start session                */
+		strcpy(pSecond_player->player_user_name, username);
+		ReleaseRes = ReleaseMutex(*mutexhandle);
+		if (ReleaseRes == FALSE)
+			return (ISP_MUTEX_RELEASE_FAILED);
+
+		//------------------------------------Critical Section end---------------------------------//
+
+		/*----------------------------------------------------------------------------------------------
+									Send event: self is ready, mutex released
+		-----------------------------------------------------------------------------------------------*/
+		SetEvent(pSecond_player->player_event);
+		printf("Server sent message: user %s set event ready\n", username);
+
+		strcpy(invite_message, "SERVER_INVITE:");
+		strcat(invite_message, pFirst_player->player_user_name);
+		error_flag = send_message_with_length(invite_message, NULL, server_socket);
+		printf("Server sent message:%s\n", invite_message);
+		if (error_flag == -1) {
+			printf("Service socket error while writing, closing thread.\n");
+			closesocket(*server_socket);
+			return 1;
+		}
+		free(rcv_buffer);
+		rcv_buffer = NULL;
+		error_flag = send_message_with_length("SERVER_PLAYER_MOVE_REQUEST", NULL, server_socket);
+		printf("Server sent message:%s\n", "SERVER_PLAYER_MOVE_REQUEST");
+		if (error_flag == -1) {
+			printf("Service socket error while writing, closing thread.\n");
+			closesocket(*server_socket);
+			return 1;
+		}
+		//wait for reply
+		RecvRes = ReceiveString(&rcv_buffer, *server_socket, 300000);
+		printf("Server sent message: user %s message type: %s\n", username, rcv_buffer);
+
+		strcpy(message_type, rcv_buffer);
+		message_type[17] = '\0';
+		strcpy(player_move, message_type[18]);
+		if (RecvRes == TRNS_FAILED) {
+			printf("Service socket error occured while reading, closing thread.\n");
+			closesocket(*server_socket);
+			//return 1;
+		}
+		else if (RecvRes == TRNS_DISCONNECTED) {
+			printf("Connection error occured while reading, closing thread.\n");
+			//goto some_error;
+		}
+		printf("Server sent message: user %s message type: %s\n", username, message_type);
+
+		if (STRINGS_ARE_EQUAL(message_type, "CLIENT_PLAYER_MOVE")) {
+			printf("Server sent message: user %s move: %s\n", username, player_move);
 
 			/*------------------------------------------------------------------------------------
-									Wait for event: another opponent in
+									Wait for event: opponent played, mutex released
 			-------------------------------------------------------------------------------------*/
-			printf("Server sent message: user %s waiting for event \n", username);
-
-			WaitRes = WaitForSingleObject(pSecond_player->player_event, 30000);// wait for event
+			WaitRes = WaitForSingleObject(pFirst_player->player_event, INFINITE);// wait for event
 
 			if (WaitRes != WAIT_OBJECT_0)
 			{
-				printf("Server sent message: user %s DIDNT received event ERROR = 0x%x\n", username, WaitRes);
-
 				if (WaitRes == WAIT_ABANDONED)
 				{
 					printf("Some thread has previously exited without releasing a mutex."
@@ -293,153 +183,263 @@ int play_against_another_client(SOCKET *server_socket, HANDLE *mutexhandle, char
 				else
 					return(ISP_MUTEX_WAIT_FAILED);
 			}
-			printf("Server sent message: user %s received event\n", username);
+			//-----------------------Critical Section Start-------------------------//
 
-				//Send invite and move request to client
-				strcpy(invite_message, "SERVER_INVITE:");
-				strcat(invite_message, pSecond_player->player_user_name);
-				rcv_buffer = NULL;
-				error_flag = send_message_with_length(invite_message, NULL, server_socket);
-				printf("Server sent message:%s\n", invite_message);
+			WaitRes = WaitForSingleObject(*mutexhandle, INFINITE);// wait for mutex to be released
+
+			if (WaitRes != WAIT_OBJECT_0)
+			{
+				if (WaitRes == WAIT_ABANDONED)
+				{
+					printf("Some thread has previously exited without releasing a mutex."
+						" This is not good programming. Please fix the code.\n");
+					return (ISP_MUTEX_ABANDONED);
+				}
+				else
+					return(ISP_MUTEX_WAIT_FAILED);
+			}
+			//Read opponents move
+			fgets(opponent_move, MAX_PARAMETERS_LENGTH, file);
+
+			// Write self move
+			strcat(player_move, '\n');
+			rewind(file);
+			fputs(player_move, file);
+			rewind(file);
+			fclose(file);
+			/*----------------------------------------------------------------------------------------------
+										   Send event: self played
+		   -----------------------------------------------------------------------------------------------*/
+			SetEvent(pSecond_player->player_event);
+			ReleaseRes = ReleaseMutex(*mutexhandle);
+			if (ReleaseRes == FALSE)
+				return (ISP_MUTEX_RELEASE_FAILED);
+			//------------------------------------Critical Section end---------------------------------//
+
+			//Check for winner
+			winner = who_is_the_winner(player_move, opponent_move);
+			//Send game result to client
+			strcpy(result_message, "SERVER_GAME_RESULT:");
+			strcat(result_message, pFirst_player->player_user_name); strcat(result_message, ";");
+			strcat(result_message, opponent_move); strcat(result_message, ";");
+			strcat(result_message, player_move); strcat(result_message, ";");
+
+
+			if (winner == 1) {//send your username as won 
+
+				strcat(result_message, username);
+				error_flag = send_message_with_length(result_message, NULL, server_socket);
+				printf("Server sent message:%s\n", result_message);
+
 				if (error_flag == -1) {
 					printf("Service socket error while writing, closing thread.\n");
 					closesocket(*server_socket);
 					return 1;
 				}
-				free(rcv_buffer);
-				rcv_buffer = NULL;
-				error_flag = send_message_with_length("SERVER_PLAYER_MOVE_REQUEST", NULL, server_socket);
-				printf("Server sent message:%s\n", "SERVER_PLAYER_MOVE_REQUEST");
+
+
+			}
+
+			else {//send opponents username as won 
+				strcat(result_message, pFirst_player->player_user_name);
+				error_flag = send_message_with_length(result_message, NULL, server_socket);
+				printf("Server sent message:%s\n", result_message);
 				if (error_flag == -1) {
 					printf("Service socket error while writing, closing thread.\n");
 					closesocket(*server_socket);
 					return 1;
-				}
-
-
-				//Get move from client
-				RecvRes = ReceiveString(&rcv_buffer, *server_socket,300000);
-				printf("Server sent message: user %s message type: %s\n", username, rcv_buffer);
-				strcpy(message_type, rcv_buffer);
-				message_type[17] = '\0';
-				strcpy(player_move, message_type[18]);
-				if (RecvRes == TRNS_FAILED) {
-					printf("Service socket error occured while reading, closing thread.\n");
-					closesocket(*server_socket);
-					//return 1;
-				}
-				else if (RecvRes == TRNS_DISCONNECTED) {
-					printf("Connection error occured while reading, closing thread.\n");
-					//goto some_error;
-				}
-				printf("Server sent message: user %s message type: %s\n", username, message_type);
-				if (STRINGS_ARE_EQUAL(message_type, "CLIENT_PLAYER_MOVE")) {
-					printf("Server sent message: user %s move: %s\n", username, player_move);
-					//-----------------------Critical Section Start-------------------------//
-
-					WaitRes = WaitForSingleObject(*mutexhandle, INFINITE);// wait for mutex to be released
-					//Write move to file
-					strcat(player_move, '\n');
-					rewind(file);
-					fputs(player_move, file);
-					rewind(file);
-					fclose(file);
-
-					/*----------------------------------------------------------------------------------------------
-											Send event: self played
-					-----------------------------------------------------------------------------------------------*/
-					SetEvent(pFirst_player->player_event);
-					ReleaseRes = ReleaseMutex(*mutexhandle);
-					if (ReleaseRes == FALSE)
-						return (ISP_MUTEX_RELEASE_FAILED);
-					//------------------------------------Critical Section end---------------------------------//
-				/*------------------------------------------------------------------------------------
-										Wait for event: Opponent played
-				-------------------------------------------------------------------------------------*/
-					WaitRes = WaitForSingleObject(pSecond_player->player_event, INFINITE);// wait for event
-
-					if (WaitRes != WAIT_OBJECT_0)
-					{
-						if (WaitRes == WAIT_ABANDONED)
-						{
-							printf("Some thread has previously exited without releasing a mutex."
-								" This is not good programming. Please fix the code.\n");
-							return (ISP_MUTEX_ABANDONED);
-						}
-						else
-							return(ISP_MUTEX_WAIT_FAILED);
-					}
-					//Read opponents move
-					//-----------------------Critical Section Start-------------------------//
-
-					WaitRes = WaitForSingleObject(*mutexhandle, INFINITE);// wait for mutex to be released
-
-					if (WaitRes != WAIT_OBJECT_0)
-					{
-						if (WaitRes == WAIT_ABANDONED)
-						{
-							printf("Some thread has previously exited without releasing a mutex."
-								" This is not good programming. Please fix the code.\n");
-							return (ISP_MUTEX_ABANDONED);
-						}
-						else
-							return(ISP_MUTEX_WAIT_FAILED);
-					}
-					//Read opponents move
-					fgets(opponent_move, MAX_PARAMETERS_LENGTH, file);
-					fclose(file);
-					ReleaseRes = ReleaseMutex(*mutexhandle);
-					if (ReleaseRes == FALSE)
-						return (ISP_MUTEX_RELEASE_FAILED);
-					//------------------------------------Critical Section end---------------------------------//
-					//Check for winner
-					winner = who_is_the_winner(player_move, opponent_move);
-					//Send game result to client
-					strcpy(result_message, "SERVER_GAME_RESULT:");
-					strcat(result_message, pFirst_player->player_user_name); strcat(result_message, ";");
-					strcat(result_message, opponent_move); strcat(result_message, ";");
-					strcat(result_message, player_move); strcat(result_message, ";");
-
-
-					if (winner == 1) {//send your username as won 
-
-						strcat(result_message, username);
-						error_flag = send_message_with_length(result_message, NULL, server_socket);
-						printf("Server sent message:%s\n", result_message);
-						if (error_flag == -1) {
-							printf("Service socket error while writing, closing thread.\n");
-							closesocket(*server_socket);
-							return 1;
-						}
-
-
-					}
-
-					else {//send opponents username as won 
-						strcat(result_message, pSecond_player->player_user_name);
-						error_flag = send_message_with_length(result_message, NULL, server_socket);
-						if (error_flag == -1) {
-							printf("Service socket error while writing, closing thread.\n");
-							closesocket(*server_socket);
-							return 1;
-						}
-					}
-
 				}
 			}
 
-		
-		//Send client game over menu
-		free(rcv_buffer);
+
+
+			//Send request for next steps SERVER_GAME_OVER_ MENU
+
+
+			//
+		}
+
+
+	}
+	else
+		/*              file does not exist, create file and wait for another player         */
+	{
+
+		strcpy(pFirst_player->player_user_name, username);
+		file = fopen("GameSession.txt", "w");
+		fclose(file);
+		ReleaseRes = ReleaseMutex(*mutexhandle);
+		if (ReleaseRes == FALSE)
+			return (ISP_MUTEX_RELEASE_FAILED);
+		//------------------------------------Critical Section end---------------------------------//
+
+		/*------------------------------------------------------------------------------------
+								Wait for event: another opponent in
+		-------------------------------------------------------------------------------------*/
+		printf("Server sent message: user %s waiting for event \n", username);
+
+		WaitRes = WaitForSingleObject(pSecond_player->player_event, 30000);// wait for event
+
+		if (WaitRes != WAIT_OBJECT_0)
+		{
+			printf("Server sent message: user %s DIDNT received event ERROR = 0x%x\n", username, WaitRes);
+
+			if (WaitRes == WAIT_ABANDONED)
+			{
+				printf("Some thread has previously exited without releasing a mutex."
+					" This is not good programming. Please fix the code.\n");
+				return (ISP_MUTEX_ABANDONED);
+			}
+			else
+				return(ISP_MUTEX_WAIT_FAILED);
+		}
+		printf("Server sent message: user %s received event\n", username);
+
+		//Send invite and move request to client
+		strcpy(invite_message, "SERVER_INVITE:");
+		strcat(invite_message, pSecond_player->player_user_name);
 		rcv_buffer = NULL;
-		error_flag = send_message_with_length("SERVER_GAME_OVER_MENU", NULL, server_socket);
+		error_flag = send_message_with_length(invite_message, NULL, server_socket);
+		printf("Server sent message:%s\n", invite_message);
 		if (error_flag == -1) {
 			printf("Service socket error while writing, closing thread.\n");
 			closesocket(*server_socket);
 			return 1;
 		}
-		error_flag = server_game_handler(username, server_socket, &mutexhandle);
-		
+		free(rcv_buffer);
+		rcv_buffer = NULL;
+		error_flag = send_message_with_length("SERVER_PLAYER_MOVE_REQUEST", NULL, server_socket);
+		printf("Server sent message:%s\n", "SERVER_PLAYER_MOVE_REQUEST");
+		if (error_flag == -1) {
+			printf("Service socket error while writing, closing thread.\n");
+			closesocket(*server_socket);
+			return 1;
+		}
+
+
+		//Get move from client
+		RecvRes = ReceiveString(&rcv_buffer, *server_socket, 300000);
+		printf("Server sent message: user %s message type: %s\n", username, rcv_buffer);
+		strcpy(message_type, rcv_buffer);
+		message_type[17] = '\0';
+		strcpy(player_move, message_type[18]);
+		if (RecvRes == TRNS_FAILED) {
+			printf("Service socket error occured while reading, closing thread.\n");
+			closesocket(*server_socket);
+			//return 1;
+		}
+		else if (RecvRes == TRNS_DISCONNECTED) {
+			printf("Connection error occured while reading, closing thread.\n");
+			//goto some_error;
+		}
+		printf("Server sent message: user %s message type: %s\n", username, message_type);
+		if (STRINGS_ARE_EQUAL(message_type, "CLIENT_PLAYER_MOVE")) {
+			printf("Server sent message: user %s move: %s\n", username, player_move);
+			//-----------------------Critical Section Start-------------------------//
+
+			WaitRes = WaitForSingleObject(*mutexhandle, INFINITE);// wait for mutex to be released
+			//Write move to file
+			strcat(player_move, '\n');
+			rewind(file);
+			fputs(player_move, file);
+			rewind(file);
+			fclose(file);
+
+			/*----------------------------------------------------------------------------------------------
+									Send event: self played
+			-----------------------------------------------------------------------------------------------*/
+			SetEvent(pFirst_player->player_event);
+			ReleaseRes = ReleaseMutex(*mutexhandle);
+			if (ReleaseRes == FALSE)
+				return (ISP_MUTEX_RELEASE_FAILED);
+			//------------------------------------Critical Section end---------------------------------//
+		/*------------------------------------------------------------------------------------
+								Wait for event: Opponent played
+		-------------------------------------------------------------------------------------*/
+			WaitRes = WaitForSingleObject(pSecond_player->player_event, INFINITE);// wait for event
+
+			if (WaitRes != WAIT_OBJECT_0)
+			{
+				if (WaitRes == WAIT_ABANDONED)
+				{
+					printf("Some thread has previously exited without releasing a mutex."
+						" This is not good programming. Please fix the code.\n");
+					return (ISP_MUTEX_ABANDONED);
+				}
+				else
+					return(ISP_MUTEX_WAIT_FAILED);
+			}
+			//Read opponents move
+			//-----------------------Critical Section Start-------------------------//
+
+			WaitRes = WaitForSingleObject(*mutexhandle, INFINITE);// wait for mutex to be released
+
+			if (WaitRes != WAIT_OBJECT_0)
+			{
+				if (WaitRes == WAIT_ABANDONED)
+				{
+					printf("Some thread has previously exited without releasing a mutex."
+						" This is not good programming. Please fix the code.\n");
+					return (ISP_MUTEX_ABANDONED);
+				}
+				else
+					return(ISP_MUTEX_WAIT_FAILED);
+			}
+			//Read opponents move
+			fgets(opponent_move, MAX_PARAMETERS_LENGTH, file);
+			fclose(file);
+			ReleaseRes = ReleaseMutex(*mutexhandle);
+			if (ReleaseRes == FALSE)
+				return (ISP_MUTEX_RELEASE_FAILED);
+			//------------------------------------Critical Section end---------------------------------//
+			//Check for winner
+			winner = who_is_the_winner(player_move, opponent_move);
+			//Send game result to client
+			strcpy(result_message, "SERVER_GAME_RESULT:");
+			strcat(result_message, pFirst_player->player_user_name); strcat(result_message, ";");
+			strcat(result_message, opponent_move); strcat(result_message, ";");
+			strcat(result_message, player_move); strcat(result_message, ";");
+
+
+			if (winner == 1) {//send your username as won 
+
+				strcat(result_message, username);
+				error_flag = send_message_with_length(result_message, NULL, server_socket);
+				printf("Server sent message:%s\n", result_message);
+				if (error_flag == -1) {
+					printf("Service socket error while writing, closing thread.\n");
+					closesocket(*server_socket);
+					return 1;
+				}
+
+
+			}
+
+			else {//send opponents username as won 
+				strcat(result_message, pSecond_player->player_user_name);
+				error_flag = send_message_with_length(result_message, NULL, server_socket);
+				if (error_flag == -1) {
+					printf("Service socket error while writing, closing thread.\n");
+					closesocket(*server_socket);
+					return 1;
+				}
+			}
+
+		}
+	}
+
+
+	//Send client game over menu
+	free(rcv_buffer);
+	rcv_buffer = NULL;
+	error_flag = send_message_with_length("SERVER_GAME_OVER_MENU", NULL, server_socket);
+	if (error_flag == -1) {
+		printf("Service socket error while writing, closing thread.\n");
+		closesocket(*server_socket);
+		return 1;
+	}
+	error_flag = server_game_handler(username, server_socket, &mutexhandle);
+
 }
 int play_against_server(SOCKET *server_socket, char *username) {
 	time_t t;
