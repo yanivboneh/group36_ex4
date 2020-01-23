@@ -21,18 +21,18 @@ Last updated by Amnon Drory, Winter 2011.
 
 SOCKET m_socket;
 bool game_over_menu_is_on = FALSE;
+bool client_wants_to_quit = FALSE;
+//HANDLE hThread[2];
 
 
-//SERVER_GAME_RESULTS:Server;server_move;your_move;who_won
-void split_parameters_into_strings(char* string_to_split, char** parameters) {
+void split_parameters_into_strings(char* string_to_split, char** parameters){
 	int i = 0, param_index = 0;
 
 	while (*string_to_split != '\0') {
 		parameters[param_index++] = string_to_split;
-		while ((*string_to_split != '\0') && (strchr(";", *string_to_split) == NULL)) {
+		while ((*string_to_split != '\0') && (strchr(";",*string_to_split) == NULL)) {
 			++string_to_split;
 			if (*string_to_split == '\0') {
-				//free(string_copy);
 				return;
 			}
 		}
@@ -44,32 +44,32 @@ void split_parameters_into_strings(char* string_to_split, char** parameters) {
 static DWORD RecvDataThread(void)
 {
 	TransferResult_t RecvRes;
-	while (TRUE) {
+	while (!client_wants_to_quit){
 		TCHAR *rcv_buffer = NULL;
-		char *token = NULL, message_type[MAX_MESSAGE_LEN + 1], parameters[MAX_LEN_OF_PARAMETERS + 1], *parameter_list[MAX_NUM_OF_PARAMETERS];
+		char *token = NULL, message_type[MAX_MESSAGE_LEN+1], parameters[MAX_LEN_OF_PARAMETERS+1], *parameter_list[MAX_NUM_OF_PARAMETERS];
 		RecvRes = ReceiveString(&rcv_buffer, m_socket, TIME_OUT_IN_MSEC);
+		if (RecvRes == TRNS_FAILED){
+			printf("Socket error while trying to write data to socket\n");
+			//return 0x555;
+		}
+		else if (RecvRes == TRNS_DISCONNECTED){
+			printf("Server closed connection. Bye!\n");
+			//return 0x555;
+		}
 		token = strtok(rcv_buffer, ":");
 		strcpy(message_type, rcv_buffer);
 		token = strtok(NULL, ":");
 		if (token != NULL) {
 			strcpy(parameters, token);
 		}
-		if (RecvRes == TRNS_FAILED) {
-			printf("Socket error while trying to write data to socket\n");
-			//return 0x555;
-		}
-		else if (RecvRes == TRNS_DISCONNECTED) {
-			printf("Server closed connection. Bye!\n");
-			//return 0x555;
-		}
-		else if (STRINGS_ARE_EQUAL(message_type, "SERVER_MAIN_MENU")) {
+		if (STRINGS_ARE_EQUAL(message_type, "SERVER_MAIN_MENU")) {
 			printf("Choose what to do next:\n"
 				"1. Play against another client\n"
 				"2. Play against the server\n"
 				"3. View the leaderboard\n"
 				"4. Quit\n");
 		}
-		else if (STRINGS_ARE_EQUAL(message_type, "SERVER_PLAYER_MOVE_REQUEST")) {
+		else if (STRINGS_ARE_EQUAL(message_type, "SERVER_PLAYER_MOVE_REQUEST")){
 			printf("Choose a move from the list: Rock, Paper, Scissors, Lizard or Spock:\n");
 		}
 		else if (STRINGS_ARE_EQUAL(message_type, "SERVER_GAME_RESULTS")) {   //SERVER_GAME_RESULTS:Server;server_move;your_move;who_won
@@ -84,7 +84,7 @@ static DWORD RecvDataThread(void)
 					"%s played: %s\n", parameter_list[2], parameter_list[0], parameter_list[1]);
 			}
 		}
-		else if (STRINGS_ARE_EQUAL(message_type, "SERVER_GAME_OVER_MENU")) {
+		else if (STRINGS_ARE_EQUAL(message_type, "SERVER_GAME_OVER_MENU")){
 			game_over_menu_is_on = TRUE;
 			printf("Choose what to do next:\n"
 				"1. Play again\n"
@@ -108,33 +108,35 @@ static DWORD SendDataThread(LPVOID lpParam)
 		}
 		if (STRINGS_ARE_EQUAL(input_buffer, "1")) {
 			if (!game_over_menu_is_on) {
-				error_flag = send_message_with_length("CLIENT_VERSUS", NULL, &m_socket);
+				error_flag = send_message("CLIENT_VERSUS", NULL, &m_socket);
 			}
 			else {
-				error_flag = send_message_with_length("CLIENT_REPLAY", NULL, &m_socket);
+				error_flag = send_message("CLIENT_REPLAY", NULL, &m_socket);
 			}
 		}
-		else if (STRINGS_ARE_EQUAL(input_buffer, "2")) {
+		else if (STRINGS_ARE_EQUAL(input_buffer, "2")){
 			if (game_over_menu_is_on) {
-				error_flag = send_message_with_length("CLIENT_MAIN_MENU", NULL, &m_socket);
+				error_flag = send_message("CLIENT_MAIN_MENU", NULL, &m_socket);
 				game_over_menu_is_on = FALSE;
 			}
 			else {
-				error_flag = send_message_with_length("CLIENT_CPU", NULL, &m_socket);
+				error_flag = send_message("CLIENT_CPU", NULL, &m_socket);
 			}
 		}
 		else if (STRINGS_ARE_EQUAL(input_buffer, "3"))
-			error_flag = send_message_with_length("CLIENT_LEADERBOARD", NULL, &m_socket);
+			error_flag = send_message("CLIENT_LEADERBOARD", NULL, &m_socket);
 		else if (STRINGS_ARE_EQUAL(input_buffer, "4")) {
-			error_flag = send_message_with_length("CLIENT_DISCONNECT", NULL, &m_socket);
-			//return 0x555; //"4" signals an exit from the client side
+			client_wants_to_quit = TRUE;
+			//CloseHandle(hThread[1]);
+			error_flag = send_message("CLIENT_DISCONNECT", NULL, &m_socket);
+			break;
 		}
 		else if (STRINGS_ARE_EQUAL(input_buffer, "ROCK") || STRINGS_ARE_EQUAL(input_buffer, "PAPER") ||
 			STRINGS_ARE_EQUAL(input_buffer, "SCISSORS") || STRINGS_ARE_EQUAL(input_buffer, "LIZARD")
 			|| STRINGS_ARE_EQUAL(input_buffer, "SPOCK")) {
-			error_flag = send_message_with_length("CLIENT_PLAYER_MOVE", input_buffer, &m_socket);
+			error_flag = send_message("CLIENT_PLAYER_MOVE", input_buffer, &m_socket);
 		}
-		if (error_flag == -1) {
+		if (error_flag == -1){
 			printf("Socket error while trying to write data to socket\n");
 			ret_val = 0x555;
 			break;
@@ -145,11 +147,9 @@ static DWORD SendDataThread(LPVOID lpParam)
 }
 
 
-//int client_game_handler(char *username, SOCKET *server_socket){}
-
 int MainClient(char *server_ip, char *port_num_str, char *username)
 {
-	int client_input_for_error = 0, port_num = 0;
+	int client_input_for_error = 0, port_num = 0, error_flag = 0;
 	char *end_ptr;
 	char send_buffer[MAX_MESSAGE_LEN];
 	TransferResult_t SendRes;
@@ -159,14 +159,9 @@ int MainClient(char *server_ip, char *port_num_str, char *username)
 
 	// Initialize Winsock.
 	WSADATA wsaData; //Create a WSADATA object called wsaData.
-	//The WSADATA structure contains information about the Windows Sockets implementation.
-
-	//Call WSAStartup and check for errors.
 	int iResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
 	if (iResult != NO_ERROR)
 		printf("Error at WSAStartup()\n");
-
-	// Create a socket.
 reconnecting:
 	m_socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 	if (m_socket == INVALID_SOCKET) {
@@ -177,8 +172,8 @@ reconnecting:
 	clientService.sin_family = AF_INET;
 	clientService.sin_addr.s_addr = inet_addr(server_ip); //Setting the IP address to connect to
 	port_num = (int)strtol(port_num_str, &end_ptr, 10);
-	clientService.sin_port = htons(SERVER_PORT); //Setting the port to connect to.
-	while (TRUE) {
+	clientService.sin_port = htons(port_num); //Setting the port to connect to.
+	while (TRUE){
 		if (connect(m_socket, (SOCKADDR*)&clientService, sizeof(clientService)) == SOCKET_ERROR) {
 			printf("Failed connecting to server on %s:%s\n"
 				"Choose what to do next:\n"
@@ -190,49 +185,34 @@ reconnecting:
 				goto reconnecting;
 			}
 			else {
-				//goto some exit
+				goto client_cleanup_1;
 			}
-			WSACleanup();
-			return 0;
 		}
 		else {
 			printf("Connected to server on %s:%s\n", server_ip, port_num_str);
-			printf("Client: CLIENT_REQUEST:%s\n", username);
 			strcpy(send_buffer, "CLIENT_REQUEST:");
 			strcat(send_buffer, username);
 			SendRes = SendString(send_buffer, m_socket);
-			if (SendRes == TRNS_FAILED) {
+			if (SendRes == TRNS_FAILED){
 				printf("Service socket error while writing, closing thread.\n");
-				closesocket(m_socket);
-				return 1;
+				goto client_cleanup_2;
 			}
 			char* AcceptedStr = NULL;
 			char* message_type = NULL;
 			RecvRes = ReceiveString(&AcceptedStr, m_socket, TIME_OUT_IN_MSEC);
-			if (RecvRes == TRNS_FAILED) {
+			if (RecvRes == TRNS_FAILED){
 				printf("Socket error while trying to write data to socket\n");
 				//return 0x555;
 			}
-			if (STRINGS_ARE_EQUAL(AcceptedStr, "SERVER_APPROVED")) {
-				printf("Client: SERVER_APPROVED\n");
+			if (STRINGS_ARE_EQUAL(AcceptedStr, "SERVER_APPROVED")){
 				break;
-				//TODO: goto two options menu
 			}
-			else if (STRINGS_ARE_EQUAL(AcceptedStr, "SERVER_DENIED")) {
+			else if (STRINGS_ARE_EQUAL(AcceptedStr, "SERVER_DENIED")){
 				printf("Server on %s:%s denied the connection request.\n", server_ip, port_num_str);
-				//goto two options menu
+				goto client_cleanup_2;
 			}
 		}
 	}
-
-	// Send and receive data.
-	/*
-		In this code, two integers are used to keep track of the number of bytes that are sent and received.
-		The send and recv functions both return an integer value of the number of bytes sent or received,
-		respectively, or an error. Each function also takes the same parameters:
-		the active socket, a char buffer, the number of bytes to send or receive, and any flags to use.
-
-	*/
 	hThread[0] = CreateThread(
 		NULL,
 		0,
@@ -257,11 +237,16 @@ reconnecting:
 
 	CloseHandle(hThread[0]);
 	CloseHandle(hThread[1]);
-
-	closesocket(m_socket);
-
-	WSACleanup();
-
-	return-1;
+client_cleanup_2:
+	if (closesocket(m_socket) == SOCKET_ERROR) {
+		printf("Failed to close MainSocket, error %ld. Ending program\n", WSAGetLastError());
+		error_flag = -1;
+	}
+client_cleanup_1:
+	if (WSACleanup() == SOCKET_ERROR) {
+		printf("Failed to close Winsocket, error %ld. Ending program.\n", WSAGetLastError());
+		error_flag = -1;
+	}
+	return error_flag;
 }
 
