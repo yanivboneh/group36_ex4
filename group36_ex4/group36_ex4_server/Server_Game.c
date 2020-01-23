@@ -149,7 +149,7 @@ int play_against_server(SOCKET *server_socket, char *username) {
 
 	char player_move[MAX_MOVE_LEN], message_type[MAX_MESSAGE_LEN + 1], parameters[MAX_LEN_OF_PARAMETERS];
 	TCHAR *rcv_buffer = NULL;
-	printf("Server: SERVER_PLAYER_MOVE_REQUEST\n");
+
 	error_flag = send_message("SERVER_PLAYER_MOVE_REQUEST", NULL, server_socket);
 	if (error_flag == -1) {
 		printf("Service socket error while writing, closing thread.\n");
@@ -174,7 +174,6 @@ int play_against_server(SOCKET *server_socket, char *username) {
 		error_flag = -1;
 		goto exit;
 	}
-	printf("Server: rcv_buffer = :%s\n", rcv_buffer);
 	game_result = who_is_the_winner(get_server_move_as_string(random_server_move), player_move);
 	if (game_result == 1) {
 		concatenate_parameters(parameters, "Server", server_move, player_move, "Server");

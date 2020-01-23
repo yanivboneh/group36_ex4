@@ -205,7 +205,6 @@ reconnecting:
 				return 0x555;
 			}
 			if (STRINGS_ARE_EQUAL(AcceptedStr, "SERVER_APPROVED")){
-				printf("Client: SERVER_APPROVED\n");
 				break;
 			}
 			else if (STRINGS_ARE_EQUAL(AcceptedStr, "SERVER_DENIED")){
