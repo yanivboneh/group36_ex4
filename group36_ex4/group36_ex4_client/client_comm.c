@@ -12,7 +12,7 @@ Last updated by Amnon Drory, Winter 2011.
 #include <stdio.h>
 #include <string.h>
 #include <winsock2.h>
-
+#include <stdbool.h>
 #include "client_comm.h"
 #include "Socket_Shared.h"
 #include "Socket_Send_Recv_Tools.h"
@@ -20,57 +20,45 @@ Last updated by Amnon Drory, Winter 2011.
 
 
 SOCKET m_socket;
-
+bool game_over_menu_is_on = FALSE;
 
 
 //SERVER_GAME_RESULTS:Server;server_move;your_move;who_won
-void split_parameters_into_strings(char* string_to_split, char*** parameters){//char** oponent_name, char** oponent_move, char** client_move, char** winner) {
-	char current_parameter[MAX_PARAMETERS_LENGTH], *string_copy = NULL;
-	int i = 0;
-	string_copy = (char*)malloc(strlen(string_to_split) * sizeof(char));
-	strcpy(string_copy, string_to_split);
-	while (*string_copy != '\0') {
-		while (*string_copy != ';') {
-			current_parameter[i] = *string_copy;
-			string_copy++;
-			i++;
+void split_parameters_into_strings(char* string_to_split, char** parameters) {
+	int i = 0, param_index = 0;
+
+	while (*string_to_split != '\0') {
+		parameters[param_index++] = string_to_split;
+		while ((*string_to_split != '\0') && (strchr(";", *string_to_split) == NULL)) {
+			++string_to_split;
+			if (*string_to_split == '\0') {
+				//free(string_copy);
+				return;
+			}
 		}
-		**parameters = current_parameter;
-		i = 0;
-		parameters++;
+		*string_to_split = '\0';
+		++string_to_split;
 	}
-	//current_parameter = strtok(*string_to_split, ";");
-	//*oponent_name = current_parameter;
-	//current_parameter = strtok(NULL, ";");
-	//*oponent_move = current_parameter;
-	//current_parameter = strtok(NULL, ";");
-	//*client_move = current_parameter;
-	//current_parameter = strtok(NULL, ";");
-	//*winner = current_parameter;
-	//free(string_copy);
 }
 
 static DWORD RecvDataThread(void)
 {
 	TransferResult_t RecvRes;
-	while (TRUE){
+	while (TRUE) {
 		TCHAR *rcv_buffer = NULL;
-		char *token = NULL, message_type[MAX_MESSAGE_LEN], *parameters = NULL, *oponent_name = NULL, *oponent_move = NULL,
-			*client_move = NULL, *winner = NULL, **parameter_list = NULL;
-		RecvRes = ReceiveString(&rcv_buffer, m_socket, "client");
+		char *token = NULL, message_type[MAX_MESSAGE_LEN + 1], parameters[MAX_LEN_OF_PARAMETERS + 1], *parameter_list[MAX_NUM_OF_PARAMETERS];
+		RecvRes = ReceiveString(&rcv_buffer, m_socket, TIME_OUT_IN_MSEC);
 		token = strtok(rcv_buffer, ":");
 		strcpy(message_type, rcv_buffer);
 		token = strtok(NULL, ":");
 		if (token != NULL) {
-			parameters = (char*)malloc(strlen(token) * sizeof(char));
 			strcpy(parameters, token);
 		}
-		printf("Client: rcv_buffer = %s\n", rcv_buffer);
-		if (RecvRes == TRNS_FAILED){
+		if (RecvRes == TRNS_FAILED) {
 			printf("Socket error while trying to write data to socket\n");
 			return 0x555;
 		}
-		else if (RecvRes == TRNS_DISCONNECTED){
+		else if (RecvRes == TRNS_DISCONNECTED) {
 			printf("Server closed connection. Bye!\n");
 			return 0x555;
 		}
@@ -80,40 +68,33 @@ static DWORD RecvDataThread(void)
 				"2. Play against the server\n"
 				"3. View the leaderboard\n"
 				"4. Quit\n");
-			//printf("%s\n", AcceptedStr);
 		}
-		else if (STRINGS_ARE_EQUAL(message_type, "SERVER_PLAYER_MOVE_REQUEST")){
+		else if (STRINGS_ARE_EQUAL(message_type, "SERVER_PLAYER_MOVE_REQUEST")) {
 			printf("Choose a move from the list: Rock, Paper, Scissors, Lizard or Spock:\n");
 		}
 		else if (STRINGS_ARE_EQUAL(message_type, "SERVER_GAME_RESULTS")) {   //SERVER_GAME_RESULTS:Server;server_move;your_move;who_won
-			split_parameters_into_strings(parameters, &parameter_list);// &oponent_name, &oponent_move, &client_move, &winner);
-			printf("You played: %s\n"
-				"%s played: %s\n"
-				"%s won!\n", client_move, oponent_name, oponent_move, winner);
+			split_parameters_into_strings(parameters, parameter_list);
+			if (!STRINGS_ARE_EQUAL(parameter_list[3], "Tie")) {
+				printf("You played: %s\n"
+					"%s played: %s\n"
+					"%s won!\n", parameter_list[2], parameter_list[0], parameter_list[1], parameter_list[3]);
+			}
+			else {
+				printf("You played: %s\n"
+					"%s played: %s\n", parameter_list[2], parameter_list[0], parameter_list[1]);
+			}
+		}
+		else if (STRINGS_ARE_EQUAL(message_type, "SERVER_GAME_OVER_MENU")) {
+			game_over_menu_is_on = TRUE;
+			printf("Choose what to do next:\n"
+				"1. Play again\n"
+				"2. Return to the main menu\n");
 		}
 		free(rcv_buffer);
-			if (parameters != NULL) {
-				free(parameters);
-		}
 	}
 	return 0;
 }
 
-//void string_to_upper_case_string(char* input_buffer, char** output_buffer) {
-//	int i = 0;
-//	char *end_of_string = '\0';
-//	while (input_buffer[i] != '\0') {
-//		if (input_buffer[i] >= 'a' && input_buffer[i] <= 'z') {
-//			**output_buffer = input_buffer[i] - 32;
-//		}
-//		else {
-//			**output_buffer = input_buffer[i];
-//		}
-//		i++;
-//		output_buffer++;
-//	}
-//	strcat(*output_buffer, *end_of_string);
-//}
 static DWORD SendDataThread(LPVOID lpParam)
 {
 	DWORD ret_val = 0;
@@ -122,18 +103,26 @@ static DWORD SendDataThread(LPVOID lpParam)
 	while (TRUE)
 	{
 		gets_s(input_buffer, sizeof(input_buffer));
-		//input_buffer = (char*)malloc((strlen(input_buffer) + 1) * sizeof(char));
 		if (strlen(input_buffer) > 1) {
 			_strupr(input_buffer);
 		}
-		//else {
-		//	strcpy(input_buffer, input_buffer);
-		//}
-		//string_to_upper_case_string(input_buffer, &input_buffer);
-		if (STRINGS_ARE_EQUAL(input_buffer, "1"))
-			error_flag = send_message_with_length("CLIENT_VERSUS", NULL, &m_socket);
-		else if (STRINGS_ARE_EQUAL(input_buffer, "2"))
-			error_flag = send_message_with_length("CLIENT_CPU", NULL, &m_socket);
+		if (STRINGS_ARE_EQUAL(input_buffer, "1")) {
+			if (!game_over_menu_is_on) {
+				error_flag = send_message_with_length("CLIENT_VERSUS", NULL, &m_socket);
+			}
+			else {
+				error_flag = send_message_with_length("CLIENT_REPLAY", NULL, &m_socket);
+			}
+		}
+		else if (STRINGS_ARE_EQUAL(input_buffer, "2")) {
+			if (game_over_menu_is_on) {
+				error_flag = send_message_with_length("CLIENT_MAIN_MENU", NULL, &m_socket);
+				game_over_menu_is_on = FALSE;
+			}
+			else {
+				error_flag = send_message_with_length("CLIENT_CPU", NULL, &m_socket);
+			}
+		}
 		else if (STRINGS_ARE_EQUAL(input_buffer, "3"))
 			error_flag = send_message_with_length("CLIENT_LEADERBOARD", NULL, &m_socket);
 		else if (STRINGS_ARE_EQUAL(input_buffer, "4")) {
@@ -145,8 +134,7 @@ static DWORD SendDataThread(LPVOID lpParam)
 			|| STRINGS_ARE_EQUAL(input_buffer, "SPOCK")) {
 			error_flag = send_message_with_length("CLIENT_PLAYER_MOVE", input_buffer, &m_socket);
 		}
-		//SendRes = SendString(input_buffer, m_socket);
-		if (error_flag == -1){
+		if (error_flag == -1) {
 			printf("Socket error while trying to write data to socket\n");
 			ret_val = 0x555;
 			break;
@@ -190,7 +178,7 @@ reconnecting:
 	clientService.sin_addr.s_addr = inet_addr(server_ip); //Setting the IP address to connect to
 	port_num = (int)strtol(port_num_str, &end_ptr, 10);
 	clientService.sin_port = htons(SERVER_PORT); //Setting the port to connect to.
-	while (TRUE){
+	while (TRUE) {
 		if (connect(m_socket, (SOCKADDR*)&clientService, sizeof(clientService)) == SOCKET_ERROR) {
 			printf("Failed connecting to server on %s:%s\n"
 				"Choose what to do next:\n"
@@ -213,30 +201,30 @@ reconnecting:
 			strcpy(send_buffer, "CLIENT_REQUEST:");
 			strcat(send_buffer, username);
 			SendRes = SendString(send_buffer, m_socket);
-			if (SendRes == TRNS_FAILED){
+			if (SendRes == TRNS_FAILED) {
 				printf("Service socket error while writing, closing thread.\n");
 				closesocket(m_socket);
 				return 1;
 			}
 			char* AcceptedStr = NULL;
 			char* message_type = NULL;
-			RecvRes = ReceiveString(&AcceptedStr, m_socket, "client");
-			if (RecvRes == TRNS_FAILED){
+			RecvRes = ReceiveString(&AcceptedStr, m_socket, TIME_OUT_IN_MSEC);
+			if (RecvRes == TRNS_FAILED) {
 				printf("Socket error while trying to write data to socket\n");
 				return 0x555;
 			}
-			if (STRINGS_ARE_EQUAL(AcceptedStr, "SERVER_APPROVED")){
+			if (STRINGS_ARE_EQUAL(AcceptedStr, "SERVER_APPROVED")) {
 				printf("Client: SERVER_APPROVED\n");
 				break;
 				//TODO: goto two options menu
 			}
-			else if (STRINGS_ARE_EQUAL(AcceptedStr, "SERVER_DENIED")){
+			else if (STRINGS_ARE_EQUAL(AcceptedStr, "SERVER_DENIED")) {
 				printf("Server on %s:%s denied the connection request.\n", server_ip, port_num_str);
 				//goto two options menu
 			}
 		}
 	}
-	
+
 	// Send and receive data.
 	/*
 		In this code, two integers are used to keep track of the number of bytes that are sent and received.
