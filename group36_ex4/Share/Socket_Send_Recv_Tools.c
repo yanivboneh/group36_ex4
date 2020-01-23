@@ -16,8 +16,14 @@
 #include <string.h>
 #include <time.h>
 
-/*oOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoO*/
-
+/*
+Description: The function is responsible for sending data thrugh the SendBuffer function, it first sends the size of the message
+			 and only then the message itself.
+Parameters: const char *Buffer - message to send
+			int BytesToSend - length of the message we are about to send
+			SOCKET sd - main communication socket
+Returns:	TransferResult_t - equals TRNS_SUCCEEDED or TRNS_FAILED
+*/
 TransferResult_t SendBuffer( const char* Buffer, int BytesToSend, SOCKET sd )
 {
 	const char* CurPlacePtr = Buffer;
@@ -41,8 +47,13 @@ TransferResult_t SendBuffer( const char* Buffer, int BytesToSend, SOCKET sd )
 	return TRNS_SUCCEEDED;
 }
 
-/*oOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoO*/
-
+/*
+Description: The function is responsible for sending data thrugh the SendBuffer function, it first sends the size of the message 
+			 and only then the message itself.
+Parameters: const char *Str - message to send
+			SOCKET sd - main communication socket
+Returns:	TransferResult_t - equals TRNS_SUCCEEDED or TRNS_FAILED
+*/
 TransferResult_t SendString( const char *Str, SOCKET sd )
 {
 	int TotalStringSizeInBytes;
@@ -59,9 +70,14 @@ TransferResult_t SendString( const char *Str, SOCKET sd )
 		sd );
 	return SendRes;
 }
-
-/*oOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoO*/
-
+/*
+Description: The function is responsible for recieving data thrugh the socket
+Parameters: char* OutputBuffer - a string that will contain the received message
+			int BytesToReceive - indicating how much more bytes are there in the received message
+			SOCKET sd - main communication socket
+			int time_out_in_msec - the time we're willing to let the socket wait for an answer.
+Returns:	TransferResult_t - equals TRNS_SUCCEEDED or TRNS_FAILED or TRNS_DISCONNECTED
+*/
 TransferResult_t ReceiveBuffer( char* OutputBuffer, int BytesToReceive, SOCKET sd, int time_out_in_msec )
 {
 	char* CurPlacePtr = OutputBuffer;
@@ -96,8 +112,14 @@ TransferResult_t ReceiveBuffer( char* OutputBuffer, int BytesToReceive, SOCKET s
 	return TRNS_SUCCEEDED;
 }
 
-/*oOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoOoO*/
-
+/*
+Description: The function is responsible for recieving data from ReceiveBuffer and updating the output buffer. It does so by first receiving 
+			 the size of the string, allocating the neccessary memory, and only then receiving the string itself.
+Parameters: char** OutputStrPtr - a pointer to a char* that will contain the received message
+			SOCKET sd - main communication socket
+			int time_out_in_msec - the time we're willing to let the socket wait for an answer.
+Returns:	TransferResult_t - equals TRNS_SUCCEEDED or TRNS_FAILED
+*/
 TransferResult_t ReceiveString( char** OutputStrPtr, SOCKET sd, int time_out_in_msec)
 {
 	/* Recv the the request to the server on socket sd */
@@ -112,10 +134,8 @@ TransferResult_t ReceiveString( char** OutputStrPtr, SOCKET sd, int time_out_in_
 			   "\tReceiveString( &Buffer, ___ )\n" );
 		return TRNS_FAILED;
 	}
-
 	/* The request is received in two parts. First the Length of the string (stored in 
-	   an int variable ), then the string itself. */
-		
+	   an int variable ), then the string itself. */	
 	RecvRes = ReceiveBuffer( 
 		(char *)( &TotalStringSizeInBytes ),
 		(int)( sizeof(TotalStringSizeInBytes) ), // 4 bytes
@@ -142,8 +162,14 @@ TransferResult_t ReceiveString( char** OutputStrPtr, SOCKET sd, int time_out_in_
 		
 	return RecvRes;
 }
-
-int send_message_with_length(char* message, char* parameters, SOCKET *server_socket) {
+/*
+Description: An intermidiate function that's responsible for concatenating the parameters to the message type
+Parameters: char* message = message type
+			char* parameters - equals None if there aren't any
+			SOCKET *server_socket - main communication socket
+Returns:	-1 if an error occured, 0 otherwise
+*/
+int send_message(char* message, char* parameters, SOCKET *server_socket) {
 	TransferResult_t SendRes;
 	int error_flag = 0;
 	char *send_message_buffer;// , send_message_len_buffer[MESSAGE_LEN_AS_INT + 1];
@@ -152,12 +178,10 @@ int send_message_with_length(char* message, char* parameters, SOCKET *server_soc
 		strcpy(send_message_buffer, message);
 		strcat(send_message_buffer, ":");
 		strcat(send_message_buffer, parameters);
-		//strcat(send_message_buffer, "\n");
 	}
 	else {
 		send_message_buffer = (char*)malloc((strlen(message) + 1) * sizeof(char));
 		strcpy(send_message_buffer, message);
-		//strcat(send_message_buffer, "\n");
 	}
 	SendRes = SendString(send_message_buffer, *server_socket);
 	if (SendRes == TRNS_FAILED) {
@@ -165,7 +189,6 @@ int send_message_with_length(char* message, char* parameters, SOCKET *server_soc
 		closesocket(*server_socket);
 		error_flag = -1;
 	}
-//exit:
-	//free(send_message_buffer);
+	free(send_message_buffer);
 	return error_flag;
 }

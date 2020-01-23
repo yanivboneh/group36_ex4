@@ -95,7 +95,7 @@ TransferResult_t ReceiveBuffer(char* OutputBuffer, int BytesToReceive, SOCKET sd
  * TRNS_FAILED - otherwise
  */ 
 TransferResult_t ReceiveString(char** OutputStrPtr, SOCKET sd, int time_out_in_msec);
-int send_message_with_length(char* message, char* parameters, SOCKET *server_socket);
+int send_message(char* message, char* parameters, SOCKET *server_socket);
 
 
 #endif // SOCKET_SEND_RECV_TOOLS_H
